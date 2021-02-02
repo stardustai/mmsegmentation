@@ -113,6 +113,8 @@ def show_result_pyplot(model, img, result, palette=None, fig_size=(15, 10)):
     if hasattr(model, 'module'):
         model = model.module
     img = model.show_result(img, result, palette=palette, show=False)
+    img = mmcv.bgr2rgb(img)
     plt.figure(figsize=fig_size)
-    plt.imshow(mmcv.bgr2rgb(img))
+    plt.imshow(img)
+    plt.savefig('infer.png')
     plt.show()
