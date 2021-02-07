@@ -17,9 +17,16 @@ class ParkinglotDataset(CustomDataset):
     The ``img_suffix`` is fixed to '_leftImg8bit.png' and ``seg_map_suffix`` is
     fixed to '_gtFine_labelTrainIds.png' for Cityscapes dataset.
     """
-
+    palette = {
+        "road": (0, 0, 0),
+        "curb": (0, 255, 255),
+        "obstacle": (0, 255, 0),
+        "chock": (255, 0, 0),
+        "parking_line": (0, 0, 255),
+        "road_line": (0, 128, 255),
+        "vehicle": (128, 128, 128)
+    }
     CLASSES = ('road', 'curb', 'obstacle', 'chock', 'parking_line', 'road_line', 'vehicle')
-
     PALETTE = [(0, 0, 0), (0, 255, 255), (0, 255, 0), (255, 0, 0), (0, 0, 255), (0, 128, 255), (128, 128, 128)]
 
     def __init__(self, **kwargs):
@@ -35,9 +42,9 @@ class ParkinglotDataset(CustomDataset):
         """Convert trainId to id for cityscapes."""
         if isinstance(result, str):
             result = np.load(result)
-        import cityscapesscripts.helpers.labels as CSLabels
+        # import cityscapesscripts.helpers.labels as CSLabels
         result_copy = result.copy()
-        for trainId, label in CSLabels.trainId2label.items():
+        for trainId, label in palette.items():
             result_copy[result == trainId] = label.id
 
         return result_copy
@@ -71,10 +78,10 @@ class ParkinglotDataset(CustomDataset):
             png_filename = osp.join(imgfile_prefix, f'{basename}.png')
 
             output = Image.fromarray(result.astype(np.uint8)).convert('P')
-            import cityscapesscripts.helpers.labels as CSLabels
-            palette = np.zeros((len(CSLabels.id2label), 3), dtype=np.uint8)
-            for label_id, label in CSLabels.id2label.items():
-                palette[label_id] = label.color
+            # import cityscapesscripts.helpers.labels as CSLabels
+            # palette = np.zeros((len(CSLabels.id2label), 3), dtype=np.uint8)
+            # for label_id, label in CSLabels.id2label.items():
+            #     palette[label_id] = label.color
 
             output.putpalette(palette)
             output.save(png_filename)
