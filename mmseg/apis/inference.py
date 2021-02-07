@@ -31,8 +31,12 @@ def init_segmentor(config, checkpoint=None, device='cuda:0'):
     model = build_segmentor(config.model, test_cfg=config.get('test_cfg'))
     if checkpoint is not None:
         checkpoint = load_checkpoint(model, checkpoint, map_location='cpu')
-        model.CLASSES = checkpoint['meta']['CLASSES']
-        model.PALETTE = checkpoint['meta']['PALETTE']
+        try:
+            model.CLASSES = checkpoint['meta']['CLASSES']
+            model.PALETTE = checkpoint['meta']['PALETTE']
+        except KeyError as e:
+            model.CLASSES = [k for k, v in config.palette.items()]
+            model.PALETTE = [v for k, v in config.palette.items()]
     model.cfg = config  # save the config in the model for convenience
     model.to(device)
     model.eval()

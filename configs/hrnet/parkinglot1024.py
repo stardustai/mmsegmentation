@@ -1,6 +1,6 @@
 _base_ = './fcn_hr18_512x1024_160k_cityscapes.py'
 dataset_type = 'ParkinglotDataset'
-load_from = 'checkpoints/fcn_hr48_512x1024_160k_cityscapes_20200602_190946-59b7973e.pth'
+load_from = 'checkpoints/parkinglot/latest.pth'
 work_dir = 'checkpoints/parkinglot/'
 seed = 0
 gpu_ids = range(1)

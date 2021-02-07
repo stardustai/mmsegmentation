@@ -5,8 +5,11 @@ import mmcv
 import os
 
 base = 'data/parkinglot/'
+work_dir = 'checkpoints/OCR_HRNet_Parkinglot/'
+# work_dir = 'checkpoints/parkinglot/'
 img_table_file = base+'img_anno.csv'
 dataset_name= 'parkinglot'
+# model_name = 'OCR_HRNet_Parkinglot'
 img_dir = 'images/'
 ann_dir = 'labels/'
 #load palette
@@ -23,49 +26,54 @@ palette = eval(open(base+'color.json', 'r').read())
 # import config
 from mmcv import Config
 from mmseg.apis import set_random_seed
-cfg = Config.fromfile('configs/hrnet/fcn_hr48_512x1024_160k_parkinglot.py')
-# cfg.dataset_type = 'ParkinglotDataset'
-# cfg.gpu_ids = range(1)
-# cfg.checkpoint_config = dict(by_epoch=False, interval=10000)
+## Load config
+# cfg = Config.fromfile('configs/hrnet/parkinglot.py')# Using HRNetV2
+cfg = Config.fromfile('configs/ocrnet/parkinglot_ocr_hrnet.py')# Using OCR+HRNet
 
-# # data
-# cfg.data.samples_per_gpu = 2
-# cfg.data.workers_per_gpu= 2
-# cfg.data_root = base
-# cfg.data.train.type = cfg.dataset_type
-# cfg.data.train.data_root = cfg.data_root
-# cfg.data.train.img_dir = img_dir
-# cfg.data.train.ann_dir = ann_dir
-# cfg.data.train.split = 'train.csv'
+# cfg.load_from = 'checkpoints/parkinglot/latest.pth'#'checkpoints/fcn_hr48_512x1024_160k_cityscapes_20200602_190946-59b7973e.pth'
+# cfg.resume_from = 'checkpoints/parkinglot/latest.pth'
 
-# cfg.data.val.type = cfg.dataset_type
-# cfg.data.val.data_root = cfg.data_root
-# cfg.data.val.img_dir = img_dir
-# cfg.data.val.ann_dir = ann_dir
-# cfg.data.val.split = 'val.csv'
+cfg.load_from = work_dir+'ocrnet_hr48_512x1024_160k_cityscapes_20200602_191037-dfbf1b0c.pth'
+cfg.resume_from = ''
+# # cfg.pop('resume_from')
 
-# cfg.data.test.type = cfg.dataset_type
-# cfg.data.test.data_root = cfg.data_root
-# cfg.data.test.img_dir = img_dir
-# cfg.data.test.ann_dir = ann_dir
-# cfg.data.test.split = 'val.csv'
+# cfg.optimizer = dict(type='SGD', lr=5e-3, momentum=0.9, weight_decay=0.0005)
+# cfg.evaluation = dict(interval=10000, metric='mIoU')
 
-# We can still use the pre-trained Mask RCNN model though we do not need to
-# use the mask branch
-# cfg.load_from = 'checkpoints/fcn_hr48_512x1024_160k_cityscapes_20200602_190946-59b7973e.pth'
-cfg.resume_from = 'checkpoints/parkinglot/iter_70000.pth'
+# update img_norm
+cfg.img_norm_cfg = dict(
+    type = 'Normalize',
+    mean=[86.2430, 84.9454, 81.4281], 
+    std=[43.0072, 42.2812, 42.9458], 
+    to_rgb=True)
 
-# Set up working dir to save files and logs.
-# cfg.work_dir = 'checkpoints/'+dataset_name
-# train config
-# cfg.seed = 0
-# set_random_seed(0, deterministic=False)
-# cfg.model.decode_head.num_classes = len(palette)
-# cfg.norm_cfg = dict(type='BN', requires_grad=True)
-# cfg.model.backbone.norm_cfg = dict(type='BN', requires_grad=True)
-# cfg.model.decode_head.norm_cfg = dict(type='BN', requires_grad=True)
+from mmcv.utils.config import Config, ConfigDict
+def update_normalization_params(obj, path='cfg'):
+    if isinstance(obj, Config) or isinstance(obj, ConfigDict):
+        if 'type' in obj and obj.type == 'Normalize':
+            obj.mean = cfg.img_norm_cfg.mean
+            obj.std = cfg.img_norm_cfg.std
+            print(f'Found {path}:{obj}, updated Normalize params')
+            return
+        else:
+            for k, v in obj.items():
+                update_normalization_params(v, path+'.'+k)
+    elif isinstance(obj, list): #list
+        for obj2 in obj:
+            update_normalization_params(obj2, f"{path}[{obj.index(obj2)}]")
+    else:
+        # print(path, obj)
+        pass
 
-print(f'Config:\n{cfg.pretty_text}')
+update_normalization_params(cfg)
+
+
+# print(f'Config:\n{cfg.pretty_text}')
+with open(work_dir+'config.py', 'w') as f:
+    f.write(cfg.pretty_text)
+
+#get gflops for model
+# os.system('python tools/get_flops.py configs/hrnet/parkinglot.py --shape 1024 512')
 
 # train and eval
 from mmseg.datasets import build_dataset
