@@ -9,7 +9,7 @@ from .hrf import HRFDataset
 from .pascal_context import PascalContextDataset
 from .stare import STAREDataset
 from .voc import PascalVOCDataset
-from .parkinglot import ParkinglotDataset
+from .parkinglot_dataset import ParkinglotDataset
 
 __all__ = [
     'CustomDataset', 'build_dataloader', 'ConcatDataset', 'RepeatDataset',

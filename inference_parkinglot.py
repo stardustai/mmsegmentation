@@ -4,8 +4,9 @@ from mmseg.models import build_segmentor
 from mmcv import Config
 import mmcv
 
-config_file = 'configs/hrnet/parkinglot.py'
-checkpoint_file = 'checkpoints/parkinglot/latest.pth'
+# config_file = 'configs/hrnet/parkinglot.py'
+config_file = 'configs/ocrnet/parkinglot_ocr_hrnet.py'
+checkpoint_file = 'checkpoints/OCR_HRNet_Parkinglot/iter_30000_71.pth'
 CLASSES = ('road', 'curb', 'obstacle', 'chock', 'parking_line', 'road_line', 'vehicle')
 PALETTE = [(0, 0, 0), (0, 255, 255), (0, 255, 0), (255, 0, 0), (0, 0, 255), (0, 128, 255), (128, 128, 128)]
 
@@ -27,7 +28,7 @@ import shutil
 
 base = 'data/parkinglot/'
 img_table_file = base+'img_anno.csv'
-test_dir = base+'test/'
+test_dir = 'output/ocr_parkinglot/'
 img_dir = base+'images/'
 anno_dir = base+'labels/'
 img_table = pd.read_csv(img_table_file)
@@ -59,3 +60,5 @@ for path in img_list:
     predict_save(model, img_path, out_dir+infer_name)
     shutil.copy2(label_path, out_dir+anno_name)
     shutil.copy2(img_path, out_dir+img_name)
+
+print('Infer finished')

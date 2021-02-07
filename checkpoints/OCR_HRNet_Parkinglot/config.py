@@ -108,8 +108,8 @@ test_pipeline = [
         ])
 ]
 data = dict(
-    samples_per_gpu=8,
-    workers_per_gpu=8,
+    samples_per_gpu=4,
+    workers_per_gpu=4,
     train=dict(
         type='ParkinglotDataset',
         data_root='data/parkinglot/',
@@ -186,7 +186,7 @@ log_config = dict(
     interval=50, hooks=[dict(type='TextLoggerHook', by_epoch=False)])
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-load_from = None
+load_from = 'checkpoints/OCR_HRNet_Parkinglot/latest.pth'
 resume_from = 'checkpoints/OCR_HRNet_Parkinglot/latest.pth'
 workflow = [('train', 1)]
 cudnn_benchmark = True
