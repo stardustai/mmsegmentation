@@ -1,16 +1,15 @@
 _base_ = './ocrnet_hr18_512x1024_160k_cityscapes.py'
 work_dir = 'checkpoints/OCR_HRNet_Parkinglot/'
 dataset_type = 'ParkinglotDataset'
-load_from = work_dir+'latest.pth'
+# load_from = work_dir+'latest.pth'
 resume_from = work_dir+'latest.pth'
 base = 'data/parkinglot/'
 palette = eval(open(base+'color.json', 'r').read())
 
 checkpoint_config = dict(by_epoch=False, interval=10000, max_keep_ckpts=5)
 evaluation = dict(interval=10000, metric='mIoU')
+# gpu_ids = range(4)
 gpu_ids = range(1)
-
-seed = 0
 if len(gpu_ids)>1:
     norm_cfg = dict(type='SyncBN', requires_grad=True)
     print('Found multiple GPU, SyncBN enabled!')
@@ -20,6 +19,7 @@ else:
 # enable fp16
 optimizer_config = dict(type='Fp16OptimizerHook', loss_scale=512.)
 
+seed = 0
 model = dict(
     pretrained='open-mmlab://msra/hrnetv2_w48',
     backbone=dict(
@@ -71,8 +71,8 @@ img_norm_cfg = dict(
     to_rgb=True)
 crop_size = (1800, 1800)
 data = dict(
-    samples_per_gpu = 4,
-    workers_per_gpu= 4,
+    samples_per_gpu = 8,
+    workers_per_gpu= 8,
     data_root = base,
     train = dict(
         type = dataset_type,

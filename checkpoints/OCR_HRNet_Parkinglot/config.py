@@ -1,11 +1,11 @@
-norm_cfg = dict(type='BN', requires_grad=True)
+norm_cfg = dict(type='SyncBN', requires_grad=True)
 model = dict(
     type='CascadeEncoderDecoder',
     num_stages=2,
     pretrained='open-mmlab://msra/hrnetv2_w48',
     backbone=dict(
         type='HRNet',
-        norm_cfg=dict(type='BN', requires_grad=True),
+        norm_cfg=dict(type='SyncBN', requires_grad=True),
         norm_eval=False,
         extra=dict(
             stage1=dict(
@@ -43,7 +43,7 @@ model = dict(
             in_index=(0, 1, 2, 3),
             kernel_size=1,
             num_convs=1,
-            norm_cfg=dict(type='BN', requires_grad=True),
+            norm_cfg=dict(type='SyncBN', requires_grad=True),
             concat_input=False,
             dropout_ratio=-1,
             align_corners=False,
@@ -57,7 +57,7 @@ model = dict(
             ocr_channels=256,
             input_transform='resize_concat',
             in_index=(0, 1, 2, 3),
-            norm_cfg=dict(type='BN', requires_grad=True),
+            norm_cfg=dict(type='SyncBN', requires_grad=True),
             dropout_ratio=-1,
             align_corners=False,
             loss_decode=dict(
