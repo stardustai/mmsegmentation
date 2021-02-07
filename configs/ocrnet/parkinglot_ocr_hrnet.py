@@ -8,8 +8,8 @@ palette = eval(open(base+'color.json', 'r').read())
 
 checkpoint_config = dict(by_epoch=False, interval=10000, max_keep_ckpts=5)
 evaluation = dict(interval=10000, metric='mIoU')
-# gpu_ids = range(4)
-gpu_ids = range(1)
+gpu_ids = range(4)
+# gpu_ids = range(1)
 if len(gpu_ids)>1:
     norm_cfg = dict(type='SyncBN', requires_grad=True)
     print('Found multiple GPU, SyncBN enabled!')

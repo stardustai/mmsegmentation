@@ -72,12 +72,12 @@ img_norm_cfg = dict(
     mean=[86.243, 84.9454, 81.4281],
     std=[43.0072, 42.2812, 42.9458],
     to_rgb=True)
-crop_size = (512, 1024)
+crop_size = (1800, 1800)
 train_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(type='LoadAnnotations'),
-    dict(type='Resize', img_scale=(2048, 1024), ratio_range=(0.5, 2.0)),
-    dict(type='RandomCrop', crop_size=(512, 1024), cat_max_ratio=0.75),
+    dict(type='Resize', img_scale=(1800, 1800), ratio_range=(0.5, 2.0)),
+    dict(type='RandomCrop', crop_size=(1024, 1024), cat_max_ratio=0.75),
     dict(type='RandomFlip', prob=0.5),
     dict(type='PhotoMetricDistortion'),
     dict(
@@ -85,7 +85,7 @@ train_pipeline = [
         mean=[86.243, 84.9454, 81.4281],
         std=[43.0072, 42.2812, 42.9458],
         to_rgb=True),
-    dict(type='Pad', size=(512, 1024), pad_val=0, seg_pad_val=255),
+    dict(type='Pad', size=(1024, 1024), pad_val=0, seg_pad_val=255),
     dict(type='DefaultFormatBundle'),
     dict(type='Collect', keys=['img', 'gt_semantic_seg'])
 ]
@@ -93,23 +93,23 @@ test_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(
         type='MultiScaleFlipAug',
-        img_scale=(2048, 1024),
+        img_scale=(1800, 1800),
         flip=False,
         transforms=[
             dict(type='Resize', keep_ratio=True),
             dict(type='RandomFlip'),
             dict(
                 type='Normalize',
-                mean=[86.243, 84.9454, 81.4281],
-                std=[43.0072, 42.2812, 42.9458],
+                mean=[123.675, 116.28, 103.53],
+                std=[58.395, 57.12, 57.375],
                 to_rgb=True),
             dict(type='ImageToTensor', keys=['img']),
             dict(type='Collect', keys=['img'])
         ])
 ]
 data = dict(
-    samples_per_gpu=4,
-    workers_per_gpu=4,
+    samples_per_gpu=8,
+    workers_per_gpu=8,
     train=dict(
         type='ParkinglotDataset',
         data_root='data/parkinglot/',
@@ -125,8 +125,8 @@ data = dict(
             dict(type='PhotoMetricDistortion'),
             dict(
                 type='Normalize',
-                mean=[86.243, 84.9454, 81.4281],
-                std=[43.0072, 42.2812, 42.9458],
+                mean=[123.675, 116.28, 103.53],
+                std=[58.395, 57.12, 57.375],
                 to_rgb=True),
             dict(type='Pad', size=(512, 1024), pad_val=0, seg_pad_val=255),
             dict(type='DefaultFormatBundle'),
@@ -149,8 +149,8 @@ data = dict(
                     dict(type='RandomFlip'),
                     dict(
                         type='Normalize',
-                        mean=[86.243, 84.9454, 81.4281],
-                        std=[43.0072, 42.2812, 42.9458],
+                        mean=[123.675, 116.28, 103.53],
+                        std=[58.395, 57.12, 57.375],
                         to_rgb=True),
                     dict(type='ImageToTensor', keys=['img']),
                     dict(type='Collect', keys=['img'])
@@ -173,8 +173,8 @@ data = dict(
                     dict(type='RandomFlip'),
                     dict(
                         type='Normalize',
-                        mean=[86.243, 84.9454, 81.4281],
-                        std=[43.0072, 42.2812, 42.9458],
+                        mean=[123.675, 116.28, 103.53],
+                        std=[58.395, 57.12, 57.375],
                         to_rgb=True),
                     dict(type='ImageToTensor', keys=['img']),
                     dict(type='Collect', keys=['img'])
@@ -186,7 +186,7 @@ log_config = dict(
     interval=50, hooks=[dict(type='TextLoggerHook', by_epoch=False)])
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-load_from = 'checkpoints/OCR_HRNet_Parkinglot/latest.pth'
+load_from = None
 resume_from = 'checkpoints/OCR_HRNet_Parkinglot/latest.pth'
 workflow = [('train', 1)]
 cudnn_benchmark = True

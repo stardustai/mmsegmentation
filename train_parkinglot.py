@@ -51,7 +51,7 @@ def update_config(obj, path='cfg'):
                 obj.std = cfg.img_norm_cfg.std
                 print(f'Found {path}:{obj}, updated Normalize params')
                 return
-            elif obj.tpye == 'Resize':
+            elif obj.type == 'Resize':
                 obj.img_scale=(1800, 1800)
             elif obj.type == 'RandomCrop':
                 obj.crop_size=(1024, 1024)
@@ -69,7 +69,7 @@ def update_config(obj, path='cfg'):
         # print(path, obj)
         pass
 
-update_normalization_params(cfg)
+update_config(cfg)
 
 
 # print(f'Config:\n{cfg.pretty_text}')
