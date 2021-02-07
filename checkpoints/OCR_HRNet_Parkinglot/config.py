@@ -31,7 +31,8 @@ model = dict(
                 num_branches=4,
                 block='BASIC',
                 num_blocks=(4, 4, 4, 4),
-                num_channels=(48, 96, 192, 384)))),
+                num_channels=(48, 96, 192, 384))),
+        with_cp=True),
     decode_head=[
         dict(
             num_classes=7,
@@ -107,8 +108,8 @@ test_pipeline = [
         ])
 ]
 data = dict(
-    samples_per_gpu=2,
-    workers_per_gpu=2,
+    samples_per_gpu=4,
+    workers_per_gpu=4,
     train=dict(
         type='ParkinglotDataset',
         data_root='data/parkinglot/',
@@ -185,12 +186,12 @@ log_config = dict(
     interval=50, hooks=[dict(type='TextLoggerHook', by_epoch=False)])
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-load_from = 'checkpoints/OCR_HRNet_Parkinglot/ocrnet_hr48_512x1024_160k_cityscapes_20200602_191037-dfbf1b0c.pth'
-resume_from = ''
+load_from = 'checkpoints/OCR_HRNet_Parkinglot/latest.pth'
+resume_from = 'checkpoints/OCR_HRNet_Parkinglot/latest.pth'
 workflow = [('train', 1)]
 cudnn_benchmark = True
 optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0005)
-optimizer_config = dict()
+optimizer_config = dict(type='Fp16OptimizerHook', loss_scale=512.0)
 lr_config = dict(policy='poly', power=0.9, min_lr=0.0001, by_epoch=False)
 runner = dict(type='IterBasedRunner', max_iters=160000)
 checkpoint_config = dict(by_epoch=False, interval=10000, max_keep_ckpts=5)
