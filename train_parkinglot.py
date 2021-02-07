@@ -33,8 +33,8 @@ cfg = Config.fromfile('configs/ocrnet/parkinglot_ocr_hrnet.py')# Using OCR+HRNet
 # cfg.load_from = 'checkpoints/parkinglot/latest.pth'#'checkpoints/fcn_hr48_512x1024_160k_cityscapes_20200602_190946-59b7973e.pth'
 # cfg.resume_from = 'checkpoints/parkinglot/latest.pth'
 
-cfg.load_from = work_dir+'ocrnet_hr48_512x1024_160k_cityscapes_20200602_191037-dfbf1b0c.pth'
-cfg.resume_from = ''
+# cfg.load_from = work_dir+'ocrnet_hr48_512x1024_160k_cityscapes_20200602_191037-dfbf1b0c.pth'
+# cfg.resume_from = ''
 # # cfg.pop('resume_from')
 
 # cfg.optimizer = dict(type='SGD', lr=5e-3, momentum=0.9, weight_decay=0.0005)

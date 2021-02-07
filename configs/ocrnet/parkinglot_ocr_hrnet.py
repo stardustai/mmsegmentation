@@ -1,7 +1,7 @@
 _base_ = './ocrnet_hr18_512x1024_160k_cityscapes.py'
 work_dir = 'checkpoints/OCR_HRNet_Parkinglot/'
 dataset_type = 'ParkinglotDataset'
-load_from = work_dir+'latest.pth'
+# load_from = work_dir+'latest.pth'
 resume_from = work_dir+'latest.pth'
 base = 'data/parkinglot/'
 palette = eval(open(base+'color.json', 'r').read())
@@ -11,14 +11,23 @@ img_norm_cfg = dict(
     to_rgb=True)
 checkpoint_config = dict(by_epoch=False, interval=10000, max_keep_ckpts=5)
 evaluation = dict(interval=10000, metric='mIoU')
-gpu_ids = range(1)
+gpu_ids = range(4)
+# gpu_ids = range(1)
+if len(gpu_ids)>1:
+    norm_cfg = dict(type='SyncBN', requires_grad=True)
+    print('Found multiple GPU, SyncBN enabled!')
+else:
+    norm_cfg = dict(type='BN', requires_grad=True)
+
+# enable fp16
+optimizer_config = dict(type='Fp16OptimizerHook', loss_scale=512.)
 
 seed = 0
-norm_cfg = dict(type='BN', requires_grad=True)
 model = dict(
     pretrained='open-mmlab://msra/hrnetv2_w48',
     backbone=dict(
         norm_cfg = norm_cfg,
+        with_cp=True,
         extra=dict(
             stage2=dict(num_channels=(48, 96)),
             stage3=dict(num_channels=(48, 96, 192)),
@@ -56,8 +65,8 @@ model = dict(
                 type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0))
     ])
 data = dict(
-    samples_per_gpu = 2,
-    workers_per_gpu= 2,
+    samples_per_gpu = 8,
+    workers_per_gpu= 8,
     data_root = base,
     train = dict(
         type = dataset_type,
