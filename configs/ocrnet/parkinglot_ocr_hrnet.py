@@ -1,20 +1,22 @@
 _base_ = './ocrnet_hr18_512x1024_160k_cityscapes.py'
 work_dir = 'checkpoints/OCR_HRNet_Parkinglot/'
 dataset_type = 'ParkinglotDataset'
-# load_from = work_dir+'latest.pth'
-resume_from = work_dir+'latest.pth'
+load_from = work_dir+'latest.pth'
+# resume_from = work_dir+'latest.pth'
 base = 'data/parkinglot/'
 palette = eval(open(base+'color.json', 'r').read())
 
 checkpoint_config = dict(by_epoch=False, interval=10000, max_keep_ckpts=5)
 evaluation = dict(interval=10000, metric='mIoU')
-gpu_ids = range(4)
-# gpu_ids = range(1)
+# gpu_ids = range(4)
+gpu_ids = range(1)
 if len(gpu_ids)>1:
     norm_cfg = dict(type='SyncBN', requires_grad=True)
+    samples_per_gpu = 8
     print('Found multiple GPU, SyncBN enabled!')
 else:
     norm_cfg = dict(type='BN', requires_grad=True)
+    samples_per_gpu = 4
 
 # enable fp16
 optimizer_config = dict(type='Fp16OptimizerHook', loss_scale=512.)
@@ -24,7 +26,7 @@ model = dict(
     pretrained='open-mmlab://msra/hrnetv2_w48',
     backbone=dict(
         norm_cfg = norm_cfg,
-        with_cp=True,
+        with_cp=True, # calculate on CPU
         extra=dict(
             stage2=dict(num_channels=(48, 96)),
             stage3=dict(num_channels=(48, 96, 192)),
@@ -45,8 +47,10 @@ model = dict(
             dropout_ratio=-1,
             # num_classes=19,
             align_corners=False,
-            loss_decode=dict(
-                type='CrossEntropyLoss', use_sigmoid=False, loss_weight=0.4)),
+            loss_decode=dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=0.4, 
+                # CLASSES = ('road', 'curb', 'obstacle', 'chock', 'parking_line', 'road_line', 'vehicle')
+                class_weight=[2.931730, 0.658505, 1, 1, 6.421162, 2.968377, 0.474590],),
+        ),
         dict(
             num_classes = len(palette),
             type='OCRHead',
@@ -60,8 +64,9 @@ model = dict(
             dropout_ratio=-1,
             # num_classes=19,
             align_corners=False,
-            loss_decode=dict(
-                type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0))
+            loss_decode=dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, 
+                class_weight=[2.931730, 0.658505, 1, 1, 6.421162, 2.968377, 0.474590],),
+        )
     ])
 
 
@@ -69,10 +74,10 @@ img_norm_cfg = dict(
     mean=[86.2430, 84.9454, 81.4281], 
     std=[43.0072, 42.2812, 42.9458], 
     to_rgb=True)
-crop_size = (1800, 1800)
+crop_size = (1024, 1024)
 data = dict(
-    samples_per_gpu = 8,
-    workers_per_gpu= 8,
+    samples_per_gpu = samples_per_gpu,
+    workers_per_gpu= samples_per_gpu,
     data_root = base,
     train = dict(
         type = dataset_type,

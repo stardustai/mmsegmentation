@@ -1,11 +1,11 @@
-norm_cfg = dict(type='BN', requires_grad=True)
+norm_cfg = dict(type='SyncBN', requires_grad=True)
 model = dict(
     type='CascadeEncoderDecoder',
     num_stages=2,
     pretrained='open-mmlab://msra/hrnetv2_w48',
     backbone=dict(
         type='HRNet',
-        norm_cfg=dict(type='BN', requires_grad=True),
+        norm_cfg=dict(type='SyncBN', requires_grad=True),
         norm_eval=False,
         extra=dict(
             stage1=dict(
@@ -43,17 +43,12 @@ model = dict(
             in_index=(0, 1, 2, 3),
             kernel_size=1,
             num_convs=1,
-            norm_cfg=dict(type='BN', requires_grad=True),
+            norm_cfg=dict(type='SyncBN', requires_grad=True),
             concat_input=False,
             dropout_ratio=-1,
             align_corners=False,
             loss_decode=dict(
-                type='CrossEntropyLoss',
-                use_sigmoid=False,
-                loss_weight=0.4,
-                class_weight=[
-                    2.93173, 0.658505, 1, 1, 6.421162, 2.968377, 0.47459
-                ])),
+                type='CrossEntropyLoss', use_sigmoid=False, loss_weight=0.4)),
         dict(
             num_classes=7,
             type='OCRHead',
@@ -62,16 +57,11 @@ model = dict(
             ocr_channels=256,
             input_transform='resize_concat',
             in_index=(0, 1, 2, 3),
-            norm_cfg=dict(type='BN', requires_grad=True),
+            norm_cfg=dict(type='SyncBN', requires_grad=True),
             dropout_ratio=-1,
             align_corners=False,
             loss_decode=dict(
-                type='CrossEntropyLoss',
-                use_sigmoid=False,
-                loss_weight=1.0,
-                class_weight=[
-                    2.93173, 0.658505, 1, 1, 6.421162, 2.968377, 0.47459
-                ]))
+                type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0))
     ],
     train_cfg=dict(),
     test_cfg=dict(mode='whole'))
@@ -82,7 +72,7 @@ img_norm_cfg = dict(
     mean=[86.243, 84.9454, 81.4281],
     std=[43.0072, 42.2812, 42.9458],
     to_rgb=True)
-crop_size = (1024, 1024)
+crop_size = (1800, 1800)
 train_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(type='LoadAnnotations'),
@@ -118,8 +108,8 @@ test_pipeline = [
         ])
 ]
 data = dict(
-    samples_per_gpu=4,
-    workers_per_gpu=4,
+    samples_per_gpu=8,
+    workers_per_gpu=8,
     train=dict(
         type='ParkinglotDataset',
         data_root='data/parkinglot/',
@@ -196,11 +186,11 @@ log_config = dict(
     interval=50, hooks=[dict(type='TextLoggerHook', by_epoch=False)])
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-load_from = 'checkpoints/OCR_HRNet_Parkinglot/latest.pth'
-resume_from = None
+load_from = None
+resume_from = 'checkpoints/OCR_HRNet_Parkinglot/latest.pth'
 workflow = [('train', 1)]
 cudnn_benchmark = True
-optimizer = dict(type='SGD', lr=0.005, momentum=0.9, weight_decay=0.0005)
+optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0005)
 optimizer_config = dict(type='Fp16OptimizerHook', loss_scale=512.0)
 lr_config = dict(policy='poly', power=0.9, min_lr=0.0001, by_epoch=False)
 runner = dict(type='IterBasedRunner', max_iters=160000)
@@ -217,5 +207,4 @@ palette = dict(
     road_line=(0, 128, 255),
     vehicle=(128, 128, 128))
 gpu_ids = range(0, 1)
-samples_per_gpu = 4
 seed = 0

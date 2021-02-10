@@ -117,5 +117,5 @@ work_dirs/
 
 # Pytorch
 *.pth
-!*/processing.py
+!**/processing.py
 /output

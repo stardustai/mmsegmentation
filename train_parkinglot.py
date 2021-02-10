@@ -29,11 +29,8 @@ from mmseg.apis import set_random_seed
 ## Load config
 # cfg = Config.fromfile('configs/hrnet/parkinglot.py')# Using HRNetV2
 cfg = Config.fromfile('configs/ocrnet/parkinglot_ocr_hrnet.py')# Using OCR+HRNet
-cfg.model.backbone.with_cp=True
-# cfg.pop('resume_from') #initial run: remove `resume_from`
-
-# cfg.optimizer = dict(type='SGD', lr=5e-3, momentum=0.9, weight_decay=0.0005)
-# cfg.evaluation = dict(interval=10000, metric='mIoU')
+# adjust learning rate
+cfg.optimizer = dict(type='SGD', lr=5e-3, momentum=0.9, weight_decay=0.0005)
 
 # update img_norm
 cfg.img_norm_cfg = dict(
@@ -53,12 +50,20 @@ def update_config(obj, path='cfg'):
                 return
             elif obj.type == 'Resize':
                 obj.img_scale=(1800, 1800)
+                print('updated `Resize`')
+                return
             elif obj.type == 'RandomCrop':
                 obj.crop_size=(1024, 1024)
+                print('updated `RandomCrop`')
+                return
             elif obj.type == 'Pad':
                 obj.size=(1024, 1024)
+                print('updated `Pad`')
+                return
             elif obj.type == 'MultiScaleFlipAug':
                 obj.img_scale=(1800, 1800)
+                print('updated `MultiScaleFlipAug`')
+                return
         else:
             for k, v in obj.items():
                 update_config(v, path+'.'+k)
@@ -76,7 +81,7 @@ update_config(cfg)
 with open(work_dir+'config.py', 'w') as f:
     f.write(cfg.pretty_text)
 
-#get gflops for model
+# get gflops for model
 # os.system('python tools/get_flops.py configs/hrnet/parkinglot.py --shape 1024 512')
 
 # train and eval
