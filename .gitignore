@@ -119,3 +119,5 @@ work_dirs/
 *.pth
 !**/processing.py
 /output
+tf_logs/
+tf_logs_0/
