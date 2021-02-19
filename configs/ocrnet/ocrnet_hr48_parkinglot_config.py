@@ -17,9 +17,11 @@ if len(gpu_ids)>1:
 else:
     norm_cfg = dict(type='BN', requires_grad=True)
     samples_per_gpu = 4
+    print('Using single GPU with batch size 4')
 
 # enable fp16
-optimizer_config = dict(type='Fp16OptimizerHook', loss_scale=512.)
+optimizer_config = dict(type='Fp16OptimizerHook', loss_scale=512.)#FP16
+print('FP16 enabled')
 
 seed = 0
 model = dict(
@@ -49,7 +51,8 @@ model = dict(
             align_corners=False,
             loss_decode=dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=0.4, 
                 # CLASSES = ('road', 'curb', 'obstacle', 'chock', 'parking_line', 'road_line', 'vehicle')
-                class_weight=[2.931730, 0.658505, 1, 1, 6.421162, 2.968377, 0.474590],),
+                class_weight=[2.931730, 0.658505, 1, 1, 6.421162, 2.968377, 0.474590],
+                ),
         ),
         dict(
             num_classes = len(palette),
@@ -65,7 +68,8 @@ model = dict(
             # num_classes=19,
             align_corners=False,
             loss_decode=dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0, 
-                class_weight=[2.931730, 0.658505, 1, 1, 6.421162, 2.968377, 0.474590],),
+                class_weight=[2.931730, 0.658505, 1, 1, 6.421162, 2.968377, 0.474590],
+                ),
         )
     ])
 
@@ -101,3 +105,11 @@ data = dict(
         split = 'val.csv'
     )
 )
+
+log_config = dict(  # config to register logger hook
+    interval=50,  # Interval to print the log
+    hooks=[
+        dict(type='TensorboardLoggerHook'),  # The Tensorboard logger is also supported
+        dict(type='TextLoggerHook', by_epoch=False)
+    ])
+log_level = 'INFO'
