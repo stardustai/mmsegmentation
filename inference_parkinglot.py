@@ -5,15 +5,11 @@ from mmcv import Config
 import mmcv
 
 # config_file = 'configs/hrnet/parkinglot.py'
-config_file = 'configs/ocrnet/parkinglot_ocr_hrnet.py'
-checkpoint_file = 'checkpoints/OCR_HRNet_Parkinglot/iter_30000_71.pth'
+config_file = 'configs/ocrnet/ocrnet_hr48_parkinglot_config.py'
+checkpoint_file = 'checkpoints/Parkinglot_ocr_hr_norm_cw/latest.pth'
 CLASSES = ('road', 'curb', 'obstacle', 'chock', 'parking_line', 'road_line', 'vehicle')
 PALETTE = [(0, 0, 0), (0, 255, 255), (0, 255, 0), (255, 0, 0), (0, 0, 255), (0, 128, 255), (128, 128, 128)]
 
-# build the model from a config file and a checkpoint file
-# cfg = Config.fromfile('configs/hrnet/fcn_hr48_512x1024_160k_parkinglot.py')
-# cfg.resume_from = checkpoint_file
-# model = build_segmentor(cfg.model)
 
 model = init_segmentor(config_file, checkpoint_file, device='cuda:0')
 model.CLASSES = CLASSES

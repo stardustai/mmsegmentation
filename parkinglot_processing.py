@@ -209,15 +209,16 @@ print(f'Annotated img: {n_labeled}/{n_record}({n_labeled/n_record*100:.2f}%)')
 # plt.show()
 
 # make train val split file
-train_val_set = img_table.dropna().sample(frac=1)
-train_val_set = train_val_set.img.apply(lambda x:x.split('.')[0])
-length = train_val_set.shape[0]
-n_train = int(length*0.95)
-train_val_set[:n_train].to_csv(base+'train.csv', index=False, header=False)
-train_val_set[n_train:].to_csv(base+'val.csv', index=False, header=False)
-print('split file updated')
+update_train_val_split = False
+if update_train_val_split:
+    train_val_set = img_table.dropna().sample(frac=1)
+    train_val_set = train_val_set.img.apply(lambda x:x.split('.')[0])
+    length = train_val_set.shape[0]
+    n_train = int(length*0.95)
+    train_val_set[:n_train].to_csv(base+'train.csv', index=False, header=False)
+    train_val_set[n_train:].to_csv(base+'val.csv', index=False, header=False)
+    print('split file updated')
 
-# Test image
 
 
 # calculate normalization param: mean and std

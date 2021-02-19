@@ -5,8 +5,7 @@ import mmcv
 import os
 
 base = 'data/parkinglot/'
-work_dir = 'checkpoints/OCR_HRNet_Parkinglot/'
-# work_dir = 'checkpoints/parkinglot/'
+work_dir = 'checkpoints/Parkinglot_ocr_hr_norm_cw/'
 img_table_file = base+'img_anno.csv'
 dataset_name= 'parkinglot'
 # model_name = 'OCR_HRNet_Parkinglot'
@@ -28,50 +27,61 @@ from mmcv import Config
 from mmseg.apis import set_random_seed
 ## Load config
 # cfg = Config.fromfile('configs/hrnet/parkinglot.py')# Using HRNetV2
-cfg = Config.fromfile('configs/ocrnet/parkinglot_ocr_hrnet.py')# Using OCR+HRNet
-# adjust learning rate
-cfg.optimizer = dict(type='SGD', lr=5e-3, momentum=0.9, weight_decay=0.0005)
+cfg = Config.fromfile('configs/ocrnet/ocrnet_hr48_parkinglot_config.py')# Using OCR+HRNet
+cfg.work_dir = work_dir
+cfg.load_from = 'checkpoints/ocrnet_hr48_512x1024_160k_cityscapes_20200602_191037-dfbf1b0c.pth'
+# cfg.load_from = 'checkpoints/OCR_HRNet_Parkinglot/iter_160000.pth'
+cfg.resume_from = 'checkpoints/Parkinglot_ocr_hr_norm_cw/latest.pth'
+cfg.runner = dict(type='IterBasedRunner', max_iters=640000)
 
-# update img_norm
-cfg.img_norm_cfg = dict(
-    type = 'Normalize',
-    mean=[86.2430, 84.9454, 81.4281], 
-    std=[43.0072, 42.2812, 42.9458], 
-    to_rgb=True)
+# adjust learning rate
+# cfg.optimizer = dict(type='SGD', lr=3e-4, momentum=0.9, weight_decay=0.0001)
+# In MMSegmentation, you may add following lines to config to make the LR of heads 10 times of backbone.
+cfg.optimizer=dict(
+    # type='AdamW', lr=0.001, weight_decay=0.0001,
+    type='SGD', lr=0.0003, momentum=0.9, weight_decay=0.00001,
+    paramwise_cfg = dict(
+        custom_keys={
+            'head': dict(lr_mult=2)})
+)
+
+
+
 
 from mmcv.utils.config import Config, ConfigDict
 def update_config(obj, path='cfg'):
-    if isinstance(obj, Config) or isinstance(obj, ConfigDict):
+    if isinstance(obj, Config) or isinstance(obj, ConfigDict or isinstance(obj, dict)):
+        check_children = False
         if 'type' in obj:
             if obj.type == 'Normalize':
                 obj.mean = cfg.img_norm_cfg.mean
                 obj.std = cfg.img_norm_cfg.std
-                print(f'Found {path}:{obj}, updated Normalize params')
-                return
+                print(f'Updated `Nomalize` at {path} -> {obj}')
             elif obj.type == 'Resize':
                 obj.img_scale=(1800, 1800)
-                print('updated `Resize`')
-                return
-            elif obj.type == 'RandomCrop':
-                obj.crop_size=(1024, 1024)
-                print('updated `RandomCrop`')
-                return
-            elif obj.type == 'Pad':
-                obj.size=(1024, 1024)
-                print('updated `Pad`')
-                return
-            elif obj.type == 'MultiScaleFlipAug':
+                print(f'updated `Resize` at {path} -> {obj}')
+            # elif obj.type == 'RandomCrop':
+            #     obj.crop_size=(1024, 1024)
+            #     print(f'updated `RandomCrop` at {path}')
+            # elif obj.type == 'Pad':
+            #     obj.size=(1024, 1024)
+            #     print(f'updated `Pad` at {path}')
+            # elif obj.type == 'MultiScaleFlipAug':
                 obj.img_scale=(1800, 1800)
-                print('updated `MultiScaleFlipAug`')
-                return
+                print(f'updated `MultiScaleFlipAug` at {path} -> {obj}')
+            else:
+                check_children = True
         else:
+            check_children = True
+        if check_children:
             for k, v in obj.items():
                 update_config(v, path+'.'+k)
     elif isinstance(obj, list): #list
         for obj2 in obj:
             update_config(obj2, f"{path}[{obj.index(obj2)}]")
     else:
-        # print(path, obj)
+        if type(obj) not in [str, tuple, int, bool, float, range]:
+            print(path, obj)
         pass
 
 update_config(cfg)
