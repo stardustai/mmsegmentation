@@ -117,6 +117,7 @@ work_dirs/
 
 # Pytorch
 *.pth
+demo/iccv09Data/
 !**/processing.py
 /output
 tf_logs/
