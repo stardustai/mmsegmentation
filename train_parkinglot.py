@@ -12,6 +12,9 @@ from mmseg import __version__
 from mmseg.apis import set_random_seed
 from mmcv.utils.config import Config as ConfigRoot, ConfigDict
 
+if torch.cuda.is_available():
+    torch.backends.cudnn.benchmark = True
+
 base = 'data/parkinglot/'
 work_dir = 'checkpoints/Parkinglot_ocr_hr_norm_cw/'
 # img_table_file = base+'img_anno.csv'
@@ -25,29 +28,35 @@ work_dir = 'checkpoints/Parkinglot_ocr_hr_norm_cw/'
 torch.backends.cudnn.benchmark = True
 
 # import config
-# cfg = Config.fromfile('configs/hrnet/parkinglot.py')# Using HRNetV2
-cfg = Config.fromfile('configs/ocrnet/ocrnet_hr48_parkinglot_config.py')# Using OCR+HRNet
+config_file = 'configs/ocrnet/ocrnet_hr48_parkinglot_config.py'# Using OCR+HRNet
+# config_file = 'configs/hrnet/parkinglot.py'# Using HRNetV2
+cfg = Config.fromfile(config_file)
 cfg.work_dir = work_dir
 # cfg.load_from = 'checkpoints/ocrnet_hr48_512x1024_160k_cityscapes_20200602_191037-dfbf1b0c.pth'
-cfg.load_from = 'checkpoints/OCR_HRNet_Parkinglot_P100/latest.pth'
+cfg.load_from = 'checkpoints/Parkinglot_ocr_hr_norm_cw/latest.pth'
 # cfg.resume_from = 'checkpoints/Parkinglot_ocr_hr_norm_cw/latest.pth'
-cfg.runner = dict(type='IterBasedRunner', max_iters=640000)
+cfg.runner = dict(type='IterBasedRunner', max_iters=80000)
 
 #GPU
-# n_gpu = torch.cuda.device_count()
-# print(f'Found {n_gpu} GPUs')
-# cfg.gpu_ids = range(n_gpu)
-# if n_gpu>1:
-#     cfg.norm_cfg = dict(type='SyncBN', requires_grad=True)
-#     cfg.samples_per_gpu = 8
-#     print('Found multiple GPU, SyncBN enabled!')
-# else:
-#     cfg.norm_cfg = dict(type='BN', requires_grad=True)
-#     cfg.samples_per_gpu = 4
-#     print('Using single GPU with batch size 4')
+n_gpu = torch.cuda.device_count()
+print(f'Found {n_gpu} GPUs')
+cfg.gpu_ids = range(n_gpu)
+if n_gpu>1:
+    cfg.norm_cfg = dict(type='SyncBN', requires_grad=True)
+    cfg.samples_per_gpu = 8
+    dist_params = dict(backend='nccl')
+    print('Found multiple GPU, SyncBN enabled!')
+else:
+    cfg.norm_cfg = dict(type='BN', requires_grad=True)
+    cfg.samples_per_gpu = 4
+    print('Using single GPU with batch size 4')
+# init distributed env first, since logger depends on the dist info.
+distributed = len(cfg.gpu_ids) > 1
+if distributed == True:
+    init_dist('pytorch', **cfg.dist_params)
 
 # adjust learning rate
-cfg.optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0001)
+cfg.optimizer = dict(type='SGD', lr=0.001, momentum=0.9, weight_decay=0.0001)
 # In MMSegmentation, you may add following lines to config to make the LR of heads 10 times of backbone.
 # cfg.optimizer=dict(
 #     type='AdamW', lr=0.0001, weight_decay=0.00001,
@@ -94,11 +103,6 @@ def update_config(obj, path='cfg'):
         pass
 
 update_config(cfg)
-
-# init distributed env first, since logger depends on the dist info.
-distributed = True
-if distributed == True:
-    init_dist('pytorch', **cfg.dist_params)
 # init the logger before other steps
 timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
 log_file = os.path.join(cfg.work_dir, f'{timestamp}.log')
@@ -112,6 +116,7 @@ env_info = '\n'.join([f'{k}: {v}' for k, v in env_info_dict.items()])
 dash_line = '-' * 60 + '\n'
 logger.info('Environment info:\n' + dash_line + env_info + '\n' + dash_line)
 meta['env_info'] = env_info
+meta['exp_name'] = os.path.basename(config_file)
 # log some basic info
 logger.info(f'Distributed training: {distributed}')
 # set random seeds
@@ -141,12 +146,12 @@ if cfg.checkpoint_config is not None:
     # checkpoints as meta data
     cfg.checkpoint_config.meta = dict(
         mmseg_version=f'{__version__}+{get_git_hash()[:7]}',
-        config=cfg.pretty_text,
+        # config=cfg.pretty_text,
         CLASSES=datasets[0].CLASSES,
         PALETTE=datasets[0].PALETTE)
 
 # save config
-# cfg.dump(os.path.join(cfg.work_dir, 'config.py'))
+cfg.dump(os.path.join(cfg.work_dir, 'config.py'))
 # with open(work_dir+'config.py', 'w') as f:
 #     f.write(cfg.pretty_text)
 

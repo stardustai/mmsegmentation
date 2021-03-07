@@ -203,20 +203,24 @@ log_config = dict(
     ])
 dist_params = dict(backend='nccl')
 log_level = 'INFO'
-load_from = 'checkpoints/ocrnet_hr48_512x1024_160k_cityscapes_20200602_191037-dfbf1b0c.pth'
-resume_from = 'checkpoints/Parkinglot_ocr_hr_norm_cw/latest.pth'
+load_from = 'checkpoints/Parkinglot_ocr_hr_norm_cw/latest.pth'
+resume_from = None
 workflow = [('train', 1)]
 cudnn_benchmark = True
-optimizer = dict(
-    type='SGD',
-    lr=0.0003,
-    momentum=0.9,
-    weight_decay=1e-05,
-    paramwise_cfg=dict(custom_keys=dict(head=dict(lr_mult=2))))
+optimizer = dict(type='SGD', lr=0.001, momentum=0.9, weight_decay=0.0001)
 optimizer_config = dict(type='Fp16OptimizerHook', loss_scale=512.0)
 lr_config = dict(policy='poly', power=0.9, min_lr=0.0001, by_epoch=False)
-runner = dict(type='IterBasedRunner', max_iters=640000)
-checkpoint_config = dict(by_epoch=False, interval=10000, max_keep_ckpts=5)
+runner = dict(type='IterBasedRunner', max_iters=80000)
+checkpoint_config = dict(
+    by_epoch=False,
+    interval=10000,
+    max_keep_ckpts=5,
+    meta=dict(
+        mmseg_version='0.10.0+5c483e5',
+        CLASSES=('road', 'curb', 'obstacle', 'chock', 'parking_line',
+                 'road_line', 'vehicle'),
+        PALETTE=[(0, 0, 0), (0, 255, 255), (0, 255, 0), (255, 0, 0),
+                 (0, 0, 255), (0, 128, 255), (128, 128, 128)]))
 evaluation = dict(interval=10000, metric='mIoU')
 work_dir = 'checkpoints/Parkinglot_ocr_hr_norm_cw/'
 base = 'data/parkinglot/'

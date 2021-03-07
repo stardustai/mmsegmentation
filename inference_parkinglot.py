@@ -6,7 +6,7 @@ import mmcv
 
 # config_file = 'configs/hrnet/parkinglot.py'
 config_file = 'configs/ocrnet/ocrnet_hr48_parkinglot_config.py'
-checkpoint_file = 'checkpoints/Parkinglot_ocr_hr_norm_cw/latest.pth'
+checkpoint_file = 'checkpoints/iter_160000_final.pth'
 CLASSES = ('road', 'curb', 'obstacle', 'chock', 'parking_line', 'road_line', 'vehicle')
 PALETTE = [(0, 0, 0), (0, 255, 255), (0, 255, 0), (255, 0, 0), (0, 0, 255), (0, 128, 255), (128, 128, 128)]
 
