@@ -103,7 +103,9 @@ venv.bak/
 # mypy
 .mypy_cache/
 
-data
+data/
+iccv09*
+test_img
 .vscode
 .idea
 
@@ -116,3 +118,7 @@ work_dirs/
 # Pytorch
 *.pth
 demo/iccv09Data/
+!**/processing.py
+/output
+tf_logs/
+tf_logs_0/

@@ -31,8 +31,12 @@ def init_segmentor(config, checkpoint=None, device='cuda:0'):
     model = build_segmentor(config.model, test_cfg=config.get('test_cfg'))
     if checkpoint is not None:
         checkpoint = load_checkpoint(model, checkpoint, map_location='cpu')
-        model.CLASSES = checkpoint['meta']['CLASSES']
-        model.PALETTE = checkpoint['meta']['PALETTE']
+        try:
+            model.CLASSES = checkpoint['meta']['CLASSES']
+            model.PALETTE = checkpoint['meta']['PALETTE']
+        except KeyError as e:
+            model.CLASSES = [k for k, v in config.palette.items()]
+            model.PALETTE = [v for k, v in config.palette.items()]
     model.cfg = config  # save the config in the model for convenience
     model.to(device)
     model.eval()
@@ -113,6 +117,8 @@ def show_result_pyplot(model, img, result, palette=None, fig_size=(15, 10)):
     if hasattr(model, 'module'):
         model = model.module
     img = model.show_result(img, result, palette=palette, show=False)
+    img = mmcv.bgr2rgb(img)
     plt.figure(figsize=fig_size)
-    plt.imshow(mmcv.bgr2rgb(img))
+    plt.imshow(img)
+    plt.savefig('infer.png')
     plt.show()

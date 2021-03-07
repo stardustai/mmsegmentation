@@ -35,7 +35,7 @@ def single_gpu_test(model,
                     data_loader,
                     show=False,
                     out_dir=None,
-                    efficient_test=False):
+                    efficient_test=True):
     """Test with single GPU.
 
     Args:
@@ -103,7 +103,7 @@ def multi_gpu_test(model,
                    data_loader,
                    tmpdir=None,
                    gpu_collect=False,
-                   efficient_test=False):
+                   efficient_test=True):
     """Test model with multiple gpus.
 
     This method tests model with multiple gpus and collects the results
