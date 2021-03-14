@@ -18,14 +18,9 @@ from tqdm import tqdm
 palette = eval(open('data/color.json', 'r').read())
 CLASSES = ('road', 'curb', 'obstacle', 'chock', 'parking_line', 'road_line', 'vehicle')
 PALETTE = [(0, 0, 0), (0, 255, 255), (0, 255, 0), (255, 0, 0), (0, 0, 255), (0, 128, 255), (128, 128, 128)]
-tolerance = 1.5
+tolerance = 2
 draw_img = True
 img_path = 'test.jpg'
-
-def getBoxAreaAndCenter(points):
-    center = (points[:,0].mean(), points[:,1].mean())
-    area = cv2.contourArea(points)
-    return area, center
 
 
 # load from topo_data
@@ -43,7 +38,7 @@ result = np.asarray(img)
 # This tends to “open” up (dark) gaps between (bright) features.
 # result = sm.opening(result, sm.disk(2))  #用边长为2的圆形滤波器进行膨胀滤波
 # result = sm.dilation(result,sm.disk(tolerance))  #用边长为5的正方形滤波器进行膨胀滤波
-# result = sm.closing(result, sm.disk(3))
+# result = sm.closing(result, sm.disk(2))
 
 ## find edge (NOT WORKING)
 # edge = canny(result,1,0.5,1)
@@ -65,21 +60,33 @@ result = np.asarray(img)
 #     simplify_with='simplification', 
 #     )
 
+
+#util
+def getBoxAreaAndCenter(points):
+    center = (points[:,0].mean(), points[:,1].mean())
+    area = cv2.contourArea(points.astype(np.float32))
+    return area, center
+
 # find polygon
 for label in palette:
     i = CLASSES.index(label)
     mask = np.where(result==i, 1, 0).astype(np.uint8)
     # polygons = Mask(mask).polygons().points # using imantics
-    # polygons = measure.find_contours(mask, 0.8) # using skimage
-    # using cv2
+
+    # using skimage
     mask = cv2.copyMakeBorder(mask, 1, 1, 1, 1, cv2.BORDER_CONSTANT, value=0)
-    polygons = cv2.findContours(mask, 
-        cv2.RETR_EXTERNAL, 
-        cv2.CHAIN_APPROX_SIMPLE, #cv2.CHAIN_APPROX_TC89_L1, 
-        offset=(-1, -1)
-    )[0]
+    polygons = measure.find_contours(mask, 0.8) 
+    polygons = [np.vstack([p[:,1]-1, p[:,0]-1]).T for p in polygons]#reverse for skimage
+
+    # using cv2
+    # mask = cv2.copyMakeBorder(mask, 1, 1, 1, 1, cv2.BORDER_CONSTANT, value=0)
+    # polygons = cv2.findContours(mask, 
+    #     cv2.RETR_EXTERNAL, 
+    #     cv2.CHAIN_APPROX_SIMPLE, #cv2.CHAIN_APPROX_TC89_L1, 
+    #     offset=(-1, -1)
+    # )[0]
     # polygons = [cv2.convexHull(p) for p in polygons] #convexHull, will not find outer edge
-    polygons = [p.squeeze() for p in polygons]
+    # polygons = [p.squeeze() for p in polygons]
     print(f'{label}:{len(polygons)}')
     for j, polygon in enumerate(polygons):
         if polygon.shape[0] <= 2:
@@ -94,7 +101,7 @@ for label in palette:
             # else:
             #     # add two points
             #     polygon = np.append(polygon, [0,0,polygon[-1,0],polygon[-1,1]]).reshape((-1,2))
-        # polygon[:,0], polygon[:,1] = polygon[:,1], polygon[:,1] #reverse for skimage
+        # 
         area, center = getBoxAreaAndCenter(polygon)
         polygon_feat = Feature(
             geometry=Polygon([polygon.tolist()]),
@@ -131,19 +138,34 @@ def snapPolygonPoints(polygons_data:list, mask:np.ndarray):
     radius = 1
     x_upper, y_upper = mask.shape
     _validate_coord = lambda x,y: x >= 0 and y >= 0 and x < x_upper and y < y_upper
-    _lookup = lambda x,y: vertices_lookup[x, y, 0] if _validate_coord(x,y) else None 
-    _lookup_check_pair = lambda x,y,label: _lookup(x, y) != -1 and _lookup(x, y) != label
+    _lookup = lambda x,y,i=0: vertices_lookup[x, y, i] if _validate_coord(x,y) else None
+    _lookup_check_pair = lambda x,y,label: _lookup(x, y) is not None and _lookup(x, y) != -1 and _lookup(x, y) != label
     # _lookup_range = lambda x0, x1, y0, y1: np.array([[_lookup(x, y) for x in range(x0,x1)] for y in range(y0, y1)])
     _lookup_scope = lambda x, y: np.array([[_lookup(x, y) for x in range(x-3, x+4)] for y in range(y-3, y+4)])
     _lookup_mask = lambda x,y: mask[y,x] if _validate_coord(x,y) else None # need to reverse x,y from OpenCV to NumPy
     _mask_scope = lambda x,y: np.array([[_lookup_mask(x_,y_) for x_ in range(x-3, x+4)] for y_ in range(y-3, y+4)])
+    _point_distance = lambda x1, y1, x2, y2: abs(x2-x1) + abs(y2-y1)
+    def _get_valid_points(x, y, label_index, radius = 1):
+        valid_points = set()
+        # search valid points from offsets
+        offsetss = [[(i,j) for i in range(-radius, radius+1)] for j in range(-radius, radius+1)]
+        for offsets in offsetss:
+            for offset in offsets:
+                x_i, y_i = x+offset[0], y+offset[1]
+                if _point_distance(x,y, x_i, y_i) > radius or (x,y)==(x_i,y_i):
+                    continue
+                if _lookup_check_pair(x_i, y_i, label_index):
+                    valid_points.add((x_i, y_i))
+        return valid_points
 
     # create lookup table
     for i, polygon in enumerate(polygons):
         for j, (x, y) in enumerate(polygon):
-            assert x == round(x) and y == round(y)
+            x, y = round(x), round(y)
             assert _validate_coord(x, y)
-            assert _lookup(x, y) == -1
+            if _lookup(x, y) != -1:
+                vertices_lookup[x, y] = -1
+                continue
             vertices_lookup[x, y, :] = [i,j]
 
     points_snaped = []
@@ -152,54 +174,49 @@ def snapPolygonPoints(polygons_data:list, mask:np.ndarray):
     for i, polygon in tqdm(enumerate(polygons)):
         label_index = label_indices[i]
         for j, (x, y) in enumerate(polygon):
-            if type(x) is float or type(y) is float or _lookup(x, y) == -1:
+            x, y = round(x), round(y)
+            if _lookup(x, y) == -1:
                 continue #snapped
             assert _lookup(x, y) == i
-            x1, y1 = polygon[j-1]#previous point
             x2, y2 = polygon[(j+1)%len(polygon)]#next point
-            degree = atan((y2-y1)/((x2-x1)+1e-8)) # degree of border line
-            d1, d2 = degree+pi/2, degree-pi/2 # +-90° to border line
-            # find two candidate coordinates, one inside and the other outside of contour
-            x_target1, y_target1 = round(x + radius * cos(d1)), round(y + radius * sin(d1))#target1 coords
-            x_target2, y_target2 = round(x + radius * cos(d2)), round(y + radius * sin(d2))#target2 coords
-            x_up, y_up = x, y-1
-            x_down, y_down = x, y+1
-            x_left, y_left = x-1, y
-            x_right, y_right = x+1, y
+            x2, y2 = round(x2), round(y2)
             # get target coordinate
             # check whether mask is outside and
             # check whether candidate coordinates next another polygon's vertex
-            if _lookup_mask(x_target1, y_target1) != label_index and _lookup_check_pair(x_target1, y_target1, label_index):
-                x_t, y_t = x_target2, y_target2
-            elif _lookup_mask(x_target2, y_target2) != label_index and _lookup_check_pair(x_target2, y_target2, label_index):
-                x_t, y_t = x_target1, y_target1
-            elif _lookup_mask(x_up, y_up) != label_index and _lookup_check_pair(x_up, y_up, label_index):
-                x_t, y_t = x_up, y_up
-            elif _lookup_mask(x_down, y_down) != label_index and _lookup_check_pair(x_down, y_down, label_index):
-                x_t, y_t = x_down, y_down
-            elif _lookup_mask(x_left, y_left) != label_index and _lookup_check_pair(x_left, y_left, label_index):
-                x_t, y_t = x_left, y_left
-            elif _lookup_mask(x_right, y_right) != label_index and _lookup_check_pair(x_right, y_right, label_index):
-                x_t, y_t = x_right, y_right
-            else:
+            x_t, y_t = None, None
+            valid_points = _get_valid_points(x, y, i)
+            # check for valid points
+            if len(valid_points) >=2:
+                valid_points2 = _get_valid_points(x2, y2, i)
+                vp1 = valid_points - valid_points2
+                # vp2 = valid_points2 - valid_points
+                vp3 = valid_points & valid_points2
+                if len(vp1)>=1 and len(valid_points2)>=1:
+                    valid_points = vp1
+                elif len(vp3) == 2:
+                    valid_points = {vp3.pop()}
+                else:
+                    valid_points = set()
+            # exception
+            if len(valid_points) == 0:
                 print(f'No adjacent vertice found at [{i}]({x},{y}):\n{_lookup_scope(x, y)}')
                 points_missed.append((i, j, (x, y)))
                 continue
             #snap points
-            j_t, n_t = vertices_lookup[x_t, y_t, :] #find j'th polygon and n'th coordinates
-            print(f'Found adjacent vertice [{i}]({x},{y})<->[{j_t}]({x_t},{y_t})')
-            x_c, y_c = polygons[j_t][n_t] # get coordinates
-            x_a, y_a = (x+x_c)/2, (y+y_c)/2 # calculate average
-            polygon[j] = [x_a, y_a]
-            polygons[j_t][n_t] = [x_a, y_a]
-            # remove from lookup table
-            vertices_lookup[x, y, 1] = -1
-            vertices_lookup[x_t, y_t, 1] = -1
-            points_snaped.append((i, j, (x, y)))
-            points_snaped.append((j_t, n_t, (x, y)))
+            valid_points.add((x,y))
+            vertices = np.array(list(valid_points))
+            x_a, y_a = vertices.mean(axis = 0).tolist()
+            for x_t, y_t in valid_points:
+                j_t = _lookup(x_t, y_t) #find j'th polygon and n'th coordinates
+                n_t = _lookup(x_t, y_t, 1) #find n'th point
+                # if (x,y) != (x_t, y_t):
+                #     print(f'Found adjacent vertice [{i}]({x},{y})<->[{j_t}]({x_t},{y_t})')
+                polygons[j_t][n_t] = [x_a, y_a]
+                # remove from lookup table
+                vertices_lookup[x_t, y_t, 0] = -1
+                points_snaped.append((j_t, n_t, (x, y)))
     #make sure all points are cleared
-    assert (vertices_lookup[:,:,1]!=-1).sum()==0
-
+    print(f'There are {len(points_missed)} points not snapped')
 
 
 
@@ -209,10 +226,11 @@ snapPolygonPoints(polygons_data, result)#snap points
 topo_data = [i['topo'] for i in polygons_data]
 pickle.dump(topo_data, open('topo_data', 'wb'))
 fc = FeatureCollection(topo_data)
-topo = tp.Topology(fc, prequantize=True, topology=True, shared_coords=False)
+topo = tp.Topology(fc, prequantize=1e4, topology=True, shared_coords=False)
 topo_s = topo.toposimplify(
     epsilon=tolerance, 
-    simplify_algorithm='vw', 
+    simplify_algorithm='dp', 
+    # simplify_algorithm='vw', 
     simplify_with='simplification', 
     )
 
