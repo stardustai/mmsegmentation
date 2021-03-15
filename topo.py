@@ -6,22 +6,31 @@ import pickle, random
 from PIL import Image, ImageDraw, ImageFont
 import cv2
 import numpy as np
-from imantics import Polygons, Mask, Annotation
+# from imantics import Polygons, Mask, Annotation
 from geojson import Feature, Polygon, FeatureCollection, LineString, MultiLineString, MultiPolygon
 from skimage import measure
 from skimage.feature import canny
 import skimage.morphology as sm
 from collections import defaultdict
 from tqdm import tqdm
-# from skimage import io,color
+from math import sin, cos, atan, pi
+
+import topojson as tp
+from shapely import geometry
+import topojson as tp
+import geopandas as gpd
+
+world = gpd.read_file(gpd.datasets.get_path("naturalearth_lowres"))
+data = world.query('continent == "Africa"')
+r = tp.Topology(data, topology=True).toposimplify(4).to_alt().properties(title='WITH Topology')
 
 palette = eval(open('data/color.json', 'r').read())
 CLASSES = ('road', 'curb', 'obstacle', 'chock', 'parking_line', 'road_line', 'vehicle')
 PALETTE = [(0, 0, 0), (0, 255, 255), (0, 255, 0), (255, 0, 0), (0, 0, 255), (0, 128, 255), (128, 128, 128)]
-tolerance = 2
+tolerance = 1
 draw_img = True
 img_path = 'test.jpg'
-
+save_svg = False
 
 # load from topo_data
 # data = pickle.load(open('topo_data', 'rb')) 
@@ -33,32 +42,13 @@ result = np.asarray(img)
 # polygons = cv2.findContours(np.where(result==1, 1, 0)\
 # .astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0] #can't work on single image
 
-## The morphological opening on an image is defined as an erosion followed by a dilation. 
+## Image morphic operation
+# The morphological opening on an image is defined as an erosion followed by a dilation. 
 # Opening can remove small bright spots (i.e. “salt”) and connect small dark cracks. 
 # This tends to “open” up (dark) gaps between (bright) features.
 # result = sm.opening(result, sm.disk(2))  #用边长为2的圆形滤波器进行膨胀滤波
 # result = sm.dilation(result,sm.disk(tolerance))  #用边长为5的正方形滤波器进行膨胀滤波
 # result = sm.closing(result, sm.disk(2))
-
-## find edge (NOT WORKING)
-# edge = canny(result,1,0.5,1)
-# edge = sm.closing(edge, sm.disk(3))
-# edge = sm.skeletonize(edge)
-# polygons = measure.find_contours(edge)
-# polygons = []
-# for polygon in polygons:
-#     polygon = measure.approximate_polygon(polygon, 1)
-#     polygon[:,0], polygon[:,1] = polygon[:,1], polygon[:,0]
-#     # polygon = [(i[1], i[0]) for i in polygon]
-#     polygons.append([polygon.tolist()])
-
-# mp = MultiPolygon(polygons)
-# topo = tp.Topology(mp, prequantize=4e3, topology=True, shared_coords=False)
-# topo_s = topo.toposimplify(
-#     epsilon=tolerance, 
-#     simplify_algorithm='vw', 
-#     simplify_with='simplification', 
-#     )
 
 
 #util
@@ -78,30 +68,10 @@ for label in palette:
     polygons = measure.find_contours(mask, 0.8) 
     polygons = [np.vstack([p[:,1]-1, p[:,0]-1]).T for p in polygons]#reverse for skimage
 
-    # using cv2
-    # mask = cv2.copyMakeBorder(mask, 1, 1, 1, 1, cv2.BORDER_CONSTANT, value=0)
-    # polygons = cv2.findContours(mask, 
-    #     cv2.RETR_EXTERNAL, 
-    #     cv2.CHAIN_APPROX_SIMPLE, #cv2.CHAIN_APPROX_TC89_L1, 
-    #     offset=(-1, -1)
-    # )[0]
-    # polygons = [cv2.convexHull(p) for p in polygons] #convexHull, will not find outer edge
-    # polygons = [p.squeeze() for p in polygons]
     print(f'{label}:{len(polygons)}')
     for j, polygon in enumerate(polygons):
         if polygon.shape[0] <= 2:
             continue
-        # if (polygon[0] != polygon[-1]).any():
-            # print('---> Polygon not closed:', polygon)
-            # polygon = np.append(polygon, np.expand_dims(polygon[0],0), axis=0)
-            # assert (polygon[0]==0).any() and (polygon[0]==0).any(), f'---> polygon not closed and not on wall:{polygon}'
-            # if polygon[0,0] == polygon[-1,0] or polygon[0,1] == polygon[-1,1]:
-            #     #add one point to close polygon
-            #     polygon = np.append(polygon, np.expand_dims(polygon[0],0), axis=0)
-            # else:
-            #     # add two points
-            #     polygon = np.append(polygon, [0,0,polygon[-1,0],polygon[-1,1]]).reshape((-1,2))
-        # 
         area, center = getBoxAreaAndCenter(polygon)
         polygon_feat = Feature(
             geometry=Polygon([polygon.tolist()]),
@@ -124,7 +94,6 @@ for label in palette:
         else:
             print(f'---> Small region {label} with area:{area} and length:{polygon.shape[0]}')
     
-from math import sin, cos, atan, pi
 def snapPolygonPoints(polygons_data:list, mask:np.ndarray):
     # create a lookup table to register polygon vertices
     # with value on [x, y, 1]-> i'th polygon and 
@@ -199,7 +168,7 @@ def snapPolygonPoints(polygons_data:list, mask:np.ndarray):
                     valid_points = set()
             # exception
             if len(valid_points) == 0:
-                print(f'No adjacent vertice found at [{i}]({x},{y}):\n{_lookup_scope(x, y)}')
+                # print(f'No adjacent vertice found at [{i}]({x},{y}):\n{_lookup_scope(x, y)}')
                 points_missed.append((i, j, (x, y)))
                 continue
             #snap points
@@ -217,7 +186,17 @@ def snapPolygonPoints(polygons_data:list, mask:np.ndarray):
                 points_snaped.append((j_t, n_t, (x, y)))
     #make sure all points are cleared
     print(f'There are {len(points_missed)} points not snapped')
+    print(f'{len(points_snaped)} points snapped')
 
+
+def get_polygon_dict(topo):
+    polygons_strctured = defaultdict(list)
+    topo_json = eval(topo.to_geojson())
+    for geo in topo_json['features']:
+        label = geo['properties']['name']
+        polygon = geo['geometry']['coordinates'][0]
+        polygons_strctured[label].append(polygon)
+    return polygons_strctured
 
 
 #simplify polygons using topo
@@ -231,22 +210,15 @@ topo_s = topo.toposimplify(
     epsilon=tolerance, 
     simplify_algorithm='dp', 
     # simplify_algorithm='vw', 
-    simplify_with='simplification', 
+    # simplify_with='simplification', 
     )
 
-with open('topo.svg', 'w') as f:
-    f.write(topo_s.to_svg())
-with open('topo0.svg', 'w') as f:
-    f.write(topo.to_svg())
+if save_svg:
+    with open('topo.svg', 'w') as f:
+        f.write(topo_s.to_svg())
+    with open('topo0.svg', 'w') as f:
+        f.write(topo.to_svg())
 
-def get_polygon_dict(topo):
-    polygons_strctured = defaultdict(list)
-    topo_json = eval(topo.to_geojson())
-    for geo in topo_json['features']:
-        label = geo['properties']['name']
-        polygon = geo['geometry']['coordinates'][0]
-        polygons_strctured[label].append(polygon)
-    return polygons_strctured
 
 polygons_strctured = get_polygon_dict(topo_s)
 polygons_strctured_0 = get_polygon_dict(topo)
