@@ -14,6 +14,8 @@ from service_streamer import ThreadedStreamer, Streamer
 import cv2
 from datetime import datetime
 from collections import defaultdict
+from tools.topo import extractPolygons, snapPolygonPoints, get_polygon_dict
+
 
 base = 'data/parkinglot/'
 palette = eval(open(base+'color.json', 'r').read())
@@ -72,48 +74,26 @@ def predict(img:str):
     return result
 
 def polygonize(result, tolerance=2, draw_img=None):
-    # polygons = [] 
-    polygons = defaultdict(list)
-    labels = []
-    result = np.array(result, dtype=np.uint8)[0]
-    # np.savetxt('seg_result.txt', result, delimiter='', fmt='%i')
-    if draw_img:
-        im = Image.open(draw_img)
-        draw = ImageDraw.Draw(im, mode='RGBA')
-        fnt = ImageFont.truetype("Pillow/Tests/fonts/FreeMono.ttf", 20)
-        # fig, ax = plt.subplots(figsize=(20,20))
-    for label in palette:
-        i = CLASSES.index(label)
-        mask = np.where(result==i, 1, 0)
-        # contours = measure.find_contours(mask, 0.5)
-        # labels = measure.label(mask, background = 0)
-        # regions = measure.regionprops(mask, cache=True, )
-        regions = Mask(mask).polygons().points
-        print(f'{label}:{len(regions)}')
-        for j, polygon in enumerate(regions):
-            area, center = getBoxAreaAndCenter(polygon)
-            # Apply approximation
-            polygon2 = measure.approximate_polygon(polygon, tolerance)
-            if area > 500:
-                print(f'{label+str(j)} -> center:{center} area:{area} points:{len(polygon)}->{len(polygon2)}')
-                polygons[label].append(polygon2.tolist())
-                # polygons.append((label, polygon2.tolist()))
-                if draw_img:
-                    color = palette[label]
-                    color2 = tuple(list(palette[label])+[128])
-                    color = tuple([255-c for c in color])
-                    polygon3 = [(i[0], i[1]) for i in polygon2]
-                    # draw.point(polygon3, fill=color)
-                    # draw.line(polygon3, width=1, fill=color, joint='curve')
-                    draw.polygon(polygon3, fill=color2, outline=color)
-                    labels.append((label+str(j), center, color))
-            else:
-                print(f'excluded region {label} with area:{area}')
-    if draw_img: #for debugging
-        for (label, center, color) in labels:
-            draw.text(center, label, fill=color, font=fnt,)
-        im.save('seg_result2.png')
-    return polygons
+    polygon_data = extractPolygons(result)
+    #sort by area from large to small
+    polygons_data.sort(key=lambda p:p['area'], reverse=True)
+    # join vertex of polygons
+    snapPolygonPoints(polygons_data, result)#snap points
+
+    #simplify polygons using topo
+    topo_data = [Feature(
+                geometry = Polygon([p['polygon']]),
+                properties = {"name": p['label']}
+                ) for p in polygons_data]
+    fc = FeatureCollection(topo_data)
+    topo = tp.Topology(fc, prequantize=True, topology=True, shared_coords=True)
+    topo_s = topo.toposimplify(
+        epsilon=tolerance, 
+        simplify_algorithm='dp', 
+        )
+    # convert to desired structure 
+    polygons_strctured = get_polygon_dict(topo_s)
+    return polygons_strctured
 
 
 def get_random_img(n=1):

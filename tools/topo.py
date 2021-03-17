@@ -14,41 +14,35 @@ import skimage.morphology as sm
 from collections import defaultdict
 from tqdm import tqdm
 from math import sin, cos, atan, pi
-
+from imantics import Mask
 import topojson as tp
 from shapely import geometry
 import topojson as tp
-import geopandas as gpd
+# import geopandas as gpd
 
-world = gpd.read_file(gpd.datasets.get_path("naturalearth_lowres"))
-data = world.query('continent == "Africa"')
-r = tp.Topology(data, topology=True).toposimplify(4).to_alt().properties(title='WITH Topology')
+# world = gpd.read_file(gpd.datasets.get_path("naturalearth_lowres"))
+# data = world.query('continent == "Africa"')
+# r = tp.Topology(data, topology=True).toposimplify(4).to_alt().properties(title='WITH Topology')
 
 palette = eval(open('data/color.json', 'r').read())
 CLASSES = ('road', 'curb', 'obstacle', 'chock', 'parking_line', 'road_line', 'vehicle')
 PALETTE = [(0, 0, 0), (0, 255, 255), (0, 255, 0), (255, 0, 0), (0, 0, 255), (0, 128, 255), (128, 128, 128)]
 tolerance = 1
 draw_img = True
-img_path = 'test.jpg'
+img_path = 'temp/test.jpg'
 save_svg = False
 
-# load from topo_data
-# data = pickle.load(open('topo_data', 'rb')) 
 
-# load from mask
-polygons_data = []
-img = Image.open('mask.png')
-result = np.asarray(img)
-# polygons = cv2.findContours(np.where(result==1, 1, 0)\
-# .astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[0] #can't work on single image
 
-## Image morphic operation
-# The morphological opening on an image is defined as an erosion followed by a dilation. 
-# Opening can remove small bright spots (i.e. “salt”) and connect small dark cracks. 
-# This tends to “open” up (dark) gaps between (bright) features.
-# result = sm.opening(result, sm.disk(2))  #用边长为2的圆形滤波器进行膨胀滤波
-# result = sm.dilation(result,sm.disk(tolerance))  #用边长为5的正方形滤波器进行膨胀滤波
-# result = sm.closing(result, sm.disk(2))
+def applyMorph(result):
+    ## Image morphic operation
+    # The morphological opening on an image is defined as an erosion followed by a dilation. 
+    # Opening can remove small bright spots (i.e. “salt”) and connect small dark cracks. 
+    # This tends to “open” up (dark) gaps between (bright) features.
+    result = sm.opening(result, sm.disk(2))  #用边长为2的圆形滤波器进行膨胀滤波
+    result = sm.dilation(result,sm.disk(tolerance))  #用边长为5的正方形滤波器进行膨胀滤波
+    result = sm.closing(result, sm.disk(2))
+    return result
 
 
 #util
@@ -57,42 +51,53 @@ def getBoxAreaAndCenter(points):
     area = cv2.contourArea(points.astype(np.float32))
     return area, center
 
-# find polygon
-for label in palette:
-    i = CLASSES.index(label)
-    mask = np.where(result==i, 1, 0).astype(np.uint8)
-    # polygons = Mask(mask).polygons().points # using imantics
 
-    # using skimage
-    mask = cv2.copyMakeBorder(mask, 1, 1, 1, 1, cv2.BORDER_CONSTANT, value=0)
-    polygons = measure.find_contours(mask, 0.8) 
-    polygons = [np.vstack([p[:,1]-1, p[:,0]-1]).T for p in polygons]#reverse for skimage
+def extractPolygons(result):
+    # find polygon
+    temp_polygons = []
+    for label in palette:
+        i = CLASSES.index(label)
+        mask = np.where(result==i, 1, 0).astype(np.uint8)
+        # using imantics
+        # polygons = Mask(mask).polygons().points 
 
-    print(f'{label}:{len(polygons)}')
-    for j, polygon in enumerate(polygons):
-        if polygon.shape[0] <= 2:
-            continue
-        area, center = getBoxAreaAndCenter(polygon)
-        polygon_feat = Feature(
-            geometry=Polygon([polygon.tolist()]),
-            # geometry=LineString(polygon.tolist()),
-            properties={"name":label}
-        )
-        polygon_approximated = measure.approximate_polygon(polygon, tolerance)
-        label2 = label+str(j)
-        # print(f'{label2} -> center:{center} area:{area} points:{len(polygon)}->{len(polygon_approximated)}')
-        if area >= 100:
-            polygons_data.append({
-                'label': label,
-                'polygon': polygon.tolist(),
-                'topo': polygon_feat,
-                'approximated': polygon_approximated,
-                'area': area,
-                'center': center,
-                'label2': label2
-            })
-        else:
-            print(f'---> Small region {label} with area:{area} and length:{polygon.shape[0]}')
+        # Using CV2
+        mask = cv2.copyMakeBorder(mask, 1, 1, 1, 1, cv2.BORDER_CONSTANT, value=0)
+        polygons = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE, offset=(-1, -1))
+        polygons = polygons[0] if len(polygons) == 2 else polygons[1]
+        polygons = [polygon.squeeze() for polygon in polygons]
+
+        # using skimage
+        # mask = cv2.copyMakeBorder(mask, 1, 1, 1, 1, cv2.BORDER_CONSTANT, value=0)
+        # polygons = measure.find_contours(mask, 0.8) 
+        # polygons = [np.vstack([p[:,1]-1, p[:,0]-1]).T for p in polygons]#reverse for skimage
+
+        print(f'{label}:{len(polygons)}')
+        for j, polygon in enumerate(polygons):
+            # p_s = geometry.Polygon(polygon)
+            if not any([polygon.shape == p.shape and polygon.sum() == p.sum() for p in temp_polygons]):
+                temp_polygons.append(polygon)
+            else:
+                print(f'find duplicated polygon: {label}({j})')
+                continue
+            if polygon.shape[0] <= 2:
+                continue
+            area, center = getBoxAreaAndCenter(polygon)
+            polygon_approximated = measure.approximate_polygon(polygon, tolerance)
+            label2 = label+str(j)
+            # print(f'{label2} -> center:{center} area:{area} points:{len(polygon)}->{len(polygon_approximated)}')
+            if area >= 100:
+                polygons_data.append({
+                    'label': label,
+                    'polygon': polygon.tolist(),
+                    # 'topo': polygon_feat,
+                    'approximated': polygon_approximated,
+                    'area': area,
+                    'center': center,
+                    'label2': label2
+                })
+            else:
+                print(f'---> Small region {label} with area:{area} and length:{polygon.shape[0]}')
     
 def snapPolygonPoints(polygons_data:list, mask:np.ndarray):
     # create a lookup table to register polygon vertices
@@ -102,6 +107,9 @@ def snapPolygonPoints(polygons_data:list, mask:np.ndarray):
     polygons = [i['polygon'] for i in polygons_data]
     labels = [i['label'] for i in polygons_data]
     label_indices = [CLASSES.index(l) for l in labels]
+
+    #check polygon joint
+    checkJointFromPolygon(polygons, mask)
 
     # utils
     radius = 1
@@ -185,8 +193,7 @@ def snapPolygonPoints(polygons_data:list, mask:np.ndarray):
                 vertices_lookup[x_t, y_t, 0] = -1
                 points_snaped.append((j_t, n_t, (x, y)))
     #make sure all points are cleared
-    print(f'There are {len(points_missed)} points not snapped')
-    print(f'{len(points_snaped)} points snapped')
+    print(f'{len(points_snaped)} points snapped and {len(points_missed)} points left ({len(points_snaped)/(len(points_missed)+len(points_snaped))*100:.1f}%)')
 
 
 def get_polygon_dict(topo):
@@ -199,51 +206,48 @@ def get_polygon_dict(topo):
     return polygons_strctured
 
 
-#simplify polygons using topo
-polygons_data.sort(key=lambda p:p['area'], reverse=True)#sort by area
-snapPolygonPoints(polygons_data, result)#snap points
-topo_data = [i['topo'] for i in polygons_data]
-pickle.dump(topo_data, open('topo_data', 'wb'))
-fc = FeatureCollection(topo_data)
-topo = tp.Topology(fc, prequantize=1e4, topology=True, shared_coords=False)
-topo_s = topo.toposimplify(
-    epsilon=tolerance, 
-    simplify_algorithm='dp', 
-    # simplify_algorithm='vw', 
-    # simplify_with='simplification', 
-    )
+def checkJointFromPolygon(polygons, mask, draw_single_points=False):
+    point_count = np.zeros_like(mask)
+    for i, polygon in enumerate(polygons):
+        polygon_np = np.zeros_like(point_count)
+        for (x,y) in polygon:
+            _x, _y = round(x), round(y)
+            point_count[_x, _y] += 1
+            polygon_np[_x, _y] = 1
+        assert (polygon_np > 1).sum() == 0
+        # Image.fromarray(np.where(polygon_np==1, 255, 0).astype(np.uint8)).save(f'tmp/{i}.png')
+    singles = (point_count == 1).sum()
+    point_o = point_count.sum() - singles
+    # single_p_np = np.zeros_like(point_count)
+    # single_p_np[point_count == 1] = 255
+    if draw_single_points:
+        draw_np = np.where(point_count>1, 128, 0)
+        draw_np[point_count == 1] = 255
+        Image.fromarray(draw_np.astype(np.uint8), mode='P').save('temp/single_points.png')
+    print(f'There are {point_o} points joined({point_o/(singles+point_o)*100:.1f}%)')
 
-if save_svg:
-    with open('topo.svg', 'w') as f:
-        f.write(topo_s.to_svg())
-    with open('topo0.svg', 'w') as f:
-        f.write(topo.to_svg())
-
-
-polygons_strctured = get_polygon_dict(topo_s)
-polygons_strctured_0 = get_polygon_dict(topo)
 
 # draw image for debugging
-def draw_polygon(label, polygon, draw):
+def draw_polygon(label, color, polygon, draw):
+    fnt = ImageFont.truetype("Arial.ttf", 20)
     p = [tuple(i) for i in polygon]
     polygon = np.array(polygon)
     center = [polygon[:,0].mean(), polygon[:,1].mean()]
     center[0] -= 5*len(label)
     center[1] -= 10
-    color = PALETTE[CLASSES.index(label)]
     color2 = tuple(list(color)+[128]) #transparent
-    color3 = tuple([200-c for c in color]) #invert
+    color3 = tuple([150-c for c in color]) #invert
     # draw.point(polygon3, fill=color3)
     # draw.line(polygon3, width=1, fill=color, joint='curve')
-    # draw.polygon(polygon3, fill=color2, outline=color)
     draw.polygon(p, fill=color2, outline=color)
     draw.point(p, fill=color3)
-    # draw.text(center, label, fill=color3, font=fnt,)
+    draw.text(center, label, fill=color, font=fnt,)
 
-if draw_img:
-    im = Image.open(img_path)
+def drawTestResults(polygons_data, polygons_strctured, polygons_strctured_0):
+    # im = Image.open(img_path)
+    im = Image.fromarray(np.zeros_like(result.astype(np.uint8))).convert(mode='RGB')
     draw = ImageDraw.Draw(im, mode='RGBA')
-    im2 = Image.open(img_path)
+    im2 = Image.fromarray(np.zeros_like(result.astype(np.uint8))).convert(mode='RGB')
     draw2 = ImageDraw.Draw(im2, mode='RGBA')
     fnt = ImageFont.truetype("Arial", 20)
     # draw approximated polygon (inferior)
@@ -252,23 +256,72 @@ if draw_img:
         label2 = data['label2']
         polygon1 = data['polygon']
         polygon2 = data['approximated']
-        draw_polygon(label, polygon1, draw)
-        draw_polygon(label, polygon2, draw2)
-    im.save('seg_result1.png') #mask -> polygon
-    im2.save('seg_result2.png') #mask -> approximate polygon
+        color = PALETTE[CLASSES.index(label)]
+        draw_polygon(label2, color, polygon1, draw)
+        draw_polygon(label2, color, polygon2, draw2)
+    im.save('temp/seg_result1.png') #mask -> polygon
+    im2.save('temp/seg_result2.png') #mask -> approximate polygon
 
     # draw topo graph
-    img3 = Image.open(img_path)
+    img3 = Image.fromarray(np.zeros_like(result.astype(np.uint8))).convert(mode='RGB')
     draw3 = ImageDraw.Draw(img3, mode='RGBA')
     for label, polygons in polygons_strctured.items():
         for polygon in polygons:
-            draw_polygon(label, polygon, draw3)
-    img3.save('seg_result3.png') #mask -> topo -> simplified polygon
+            color = PALETTE[CLASSES.index(label)]
+            draw_polygon(label, color, polygon, draw3)
+    img3.save('temp/seg_result3.png') #mask -> topo -> simplified polygon
 
     # draw original topo graph
-    img4 = Image.open(img_path)
+    img4 = Image.fromarray(np.zeros_like(result.astype(np.uint8))).convert(mode='RGB')
     draw4 = ImageDraw.Draw(img4, mode='RGBA')
     for label, polygons in polygons_strctured_0.items():
         for polygon in polygons:
-            draw_polygon(label, polygon, draw4)
-    img4.save('seg_result4.png') #mask -> topo polygon
+            color = PALETTE[CLASSES.index(label)]
+            draw_polygon(label, color, polygon, draw4)
+    img4.save('temp/seg_result4.png') #mask -> topo polygon
+
+
+if __name__ == '__main__':
+    ## Load data
+    # load from topo_data
+    # data = pickle.load(open('topo_data', 'rb')) 
+    # load from mask
+    polygons_data = []
+    img = Image.open('temp/mask.png')
+    result = np.asarray(img)
+    polygon_data = extractPolygons(result)
+
+    #sort by area from large to small
+    polygons_data.sort(key=lambda p:p['area'], reverse=True)
+    snapPolygonPoints(polygons_data, result)#snap points
+
+    #simplify polygons using topo
+    topo_data = [Feature(
+                geometry = Polygon([p['polygon']]),
+                properties = {"name": p['label']}
+                ) for p in polygons_data]
+    # pickle.dump(topo_data, open('topo_data', 'wb'))
+    fc = FeatureCollection(topo_data)
+    topo = tp.Topology(fc, prequantize=True, topology=True, shared_coords=True)
+    topo_s = topo.toposimplify(
+        epsilon=tolerance, 
+        simplify_algorithm='dp', 
+        # simplify_algorithm='vw', 
+        # simplify_with='simplification', 
+        )
+
+    if save_svg:
+        with open('temp/topo.svg', 'w') as f:
+            f.write(topo_s.to_svg())
+        with open('temp/topo0.svg', 'w') as f:
+            f.write(topo.to_svg())
+
+
+    polygons_strctured = get_polygon_dict(topo_s)
+    polygons_strctured_0 = get_polygon_dict(topo)
+
+    if draw_img:
+        drawTestResults(polygons_data, polygons_strctured, polygons_strctured_0)
+        polygons = [p for l,ps in polygons_strctured.items() for p in ps]
+        # checkJointFromPolygon(polygons, result, True)
+        
