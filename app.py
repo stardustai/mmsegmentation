@@ -14,7 +14,9 @@ from service_streamer import ThreadedStreamer, Streamer
 import cv2
 from datetime import datetime
 from collections import defaultdict
-from tools.topo import extractPolygons, snapPolygonPoints, get_polygon_dict
+from tools.topo import extractPolygons, snapPolygonPoints, get_polygon_dict, drawResults
+from geojson import Feature, Polygon, FeatureCollection
+import topojson as tp
 
 
 base = 'data/parkinglot/'
@@ -37,31 +39,24 @@ def main():
         file = request.files['image']
         assert file.content_type[:6] == 'image/', 'must upload image type file'
         filename = secure_filename(file.filename)
-        uploaded_img = file.read()
     except Exception as e:
         return str(e)
     img_path = processImg(file, filename)
     outputs = streamer.predict([img_path])
-    view_img = request.form.get('view_img', False)
-    view_img = True if view_img == 'true' else False
-    if view_img:# == 'true' or view_img is True:
-        ext = img_path.split('.')[-1]
-        output_path = img_path.replace(ext, 'result.'+ext)
-        model.show_result(img_path, outputs, palette=PALETTE, out_file=output_path)
-        #return img0
-        return send_file(output_path)
+    view_img = request.form.get('view_img', False) == 'true'
     tolerance = int(request.form.get('tolerance', 2))
-    results = polygonize(outputs, tolerance=tolerance)
-    return jsonify(results)
+    polygons_strctured = polygonize(outputs[0], tolerance)
+    # draw result
+    if view_img:
+        draw_path = drawResults(polygons_strctured, img_path, mode=3)
+        return send_file(draw_path)
+    return jsonify(polygons_strctured)
 
 def processImg(uploaded_file, filename):
     datestr = datetime.now().isoformat().split('T')[0]
     tmp_path = 'output/'+datestr
     os.makedirs(tmp_path, exist_ok=True)
     tmp_path += '/'+filename
-    # img = cv2.imdecode(np.frombuffer(uoloaded_file, np.uint8), cv2.IMREAD_UNCHANGED)
-    # assert img is not None, 'Not Image'
-    # cv2.imwrite(tmp_path, img)
     img = Image.open(uploaded_file.stream)
     img.save(tmp_path)
     return tmp_path
@@ -73,8 +68,8 @@ def predict(img:str):
     result = inference_segmentor(model, img)
     return result
 
-def polygonize(result, tolerance=2, draw_img=None):
-    polygon_data = extractPolygons(result)
+def polygonize(result, tolerance=1, draw_img=None):
+    polygons_data = extractPolygons(result)
     #sort by area from large to small
     polygons_data.sort(key=lambda p:p['area'], reverse=True)
     # join vertex of polygons
@@ -107,23 +102,6 @@ def get_random_img(n=1):
     # img_path = img_dir+img_name
     return paths
 
-def getBoxAreaAndCenter(points):
-    xmax = points[:,0].max()
-    xmin = points[:,0].min()
-    ymax = points[:,1].max()
-    ymin = points[:,1].min()
-    area = (xmax-xmin)*(ymax-ymin)
-    center = ((xmax+xmin)/2,(ymax+ymin)/2)
-    return area, center
-
-    # area = Annotation(polygons=points.tolist(), width=points[:,0].max(), height=points[:,1].max()).area
-    size = (points[:,0].max(), points[:,1].max())
-    mask = np.zeros(size, np.uint8)
-    mask = cv2.fillPoly(mask, [points], 1)
-    area = mask.sum()
-    center = ((mask*range(1,size[0]+1)).mean(), (mask*range(1,size[1]+1)).mean())
-    return area, center
-
 ## Local test
 # paths = get_random_img()
 # img_path = paths[0]
@@ -136,5 +114,5 @@ if __name__ == "__main__":
     streamer = ThreadedStreamer(predict, batch_size=4, max_latency=0.5)
     # spawn child process as worker for multiple GPU
     # streamer = Streamer(predict_save, batch_size=4, max_latency=0.1)
-    app.run(port=5005, debug=False, host= '0.0.0.0')
+    app.run(port=5005, debug=True, host= '0.0.0.0')
     print('Flask started')

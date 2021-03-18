@@ -24,7 +24,7 @@ import topojson as tp
 # data = world.query('continent == "Africa"')
 # r = tp.Topology(data, topology=True).toposimplify(4).to_alt().properties(title='WITH Topology')
 
-palette = eval(open('data/color.json', 'r').read())
+palette = eval(open('data/parkinglot/color.json', 'r').read())
 CLASSES = ('road', 'curb', 'obstacle', 'chock', 'parking_line', 'road_line', 'vehicle')
 PALETTE = [(0, 0, 0), (0, 255, 255), (0, 255, 0), (255, 0, 0), (0, 0, 255), (0, 128, 255), (128, 128, 128)]
 tolerance = 1
@@ -55,6 +55,7 @@ def getBoxAreaAndCenter(points):
 def extractPolygons(result):
     # find polygon
     temp_polygons = []
+    polygons_data = []
     for label in palette:
         i = CLASSES.index(label)
         mask = np.where(result==i, 1, 0).astype(np.uint8)
@@ -74,7 +75,7 @@ def extractPolygons(result):
 
         print(f'{label}:{len(polygons)}')
         for j, polygon in enumerate(polygons):
-            # p_s = geometry.Polygon(polygon)
+            # remove duplicated polygon
             if not any([polygon.shape == p.shape and polygon.sum() == p.sum() for p in temp_polygons]):
                 temp_polygons.append(polygon)
             else:
@@ -98,6 +99,7 @@ def extractPolygons(result):
                 })
             else:
                 print(f'---> Small region {label} with area:{area} and length:{polygon.shape[0]}')
+    return polygons_data
     
 def snapPolygonPoints(polygons_data:list, mask:np.ndarray):
     # create a lookup table to register polygon vertices
@@ -229,7 +231,7 @@ def checkJointFromPolygon(polygons, mask, draw_single_points=False):
 
 # draw image for debugging
 def draw_polygon(label, color, polygon, draw):
-    fnt = ImageFont.truetype("Arial.ttf", 20)
+    # fnt = ImageFont.truetype("Arial.ttf", 20)
     p = [tuple(i) for i in polygon]
     polygon = np.array(polygon)
     center = [polygon[:,0].mean(), polygon[:,1].mean()]
@@ -241,44 +243,61 @@ def draw_polygon(label, color, polygon, draw):
     # draw.line(polygon3, width=1, fill=color, joint='curve')
     draw.polygon(p, fill=color2, outline=color)
     draw.point(p, fill=color3)
-    draw.text(center, label, fill=color, font=fnt,)
+    draw.text(center, label, fill=color)
 
-def drawTestResults(polygons_data, polygons_strctured, polygons_strctured_0):
-    # im = Image.open(img_path)
-    im = Image.fromarray(np.zeros_like(result.astype(np.uint8))).convert(mode='RGB')
-    draw = ImageDraw.Draw(im, mode='RGBA')
-    im2 = Image.fromarray(np.zeros_like(result.astype(np.uint8))).convert(mode='RGB')
-    draw2 = ImageDraw.Draw(im2, mode='RGBA')
-    fnt = ImageFont.truetype("Arial", 20)
+def drawResults(polygons_data, img_path, mode=None):
+    img = Image.open(img_path)
+    # im = img.convert(mode='RGBA')
+    draw = ImageDraw.Draw(img, mode='RGBA')
+    # im2 = img.convert(mode='RGBA')
+    img2 = img.copy()
+    draw2 = ImageDraw.Draw(img2, mode='RGBA')
     # draw approximated polygon (inferior)
-    for data in polygons_data:
-        label = data['label']
-        label2 = data['label2']
-        polygon1 = data['polygon']
-        polygon2 = data['approximated']
-        color = PALETTE[CLASSES.index(label)]
-        draw_polygon(label2, color, polygon1, draw)
-        draw_polygon(label2, color, polygon2, draw2)
-    im.save('temp/seg_result1.png') #mask -> polygon
-    im2.save('temp/seg_result2.png') #mask -> approximate polygon
-
-    # draw topo graph
-    img3 = Image.fromarray(np.zeros_like(result.astype(np.uint8))).convert(mode='RGB')
-    draw3 = ImageDraw.Draw(img3, mode='RGBA')
-    for label, polygons in polygons_strctured.items():
-        for polygon in polygons:
+    img_path = img_path + f'_result_mode{mode}.png'
+    if mode == 1: # draw original prediction
+        for data in polygons_data:
+            label = data['label']
+            label2 = data['label2']
+            polygon1 = data['polygon']
             color = PALETTE[CLASSES.index(label)]
-            draw_polygon(label, color, polygon, draw3)
-    img3.save('temp/seg_result3.png') #mask -> topo -> simplified polygon
+            draw_polygon(label2, color, polygon1, draw)
+        img.save(img_path) #mask -> polygon
+
+    elif mode == 2: # draw prediction using approximation
+        for data in polygons_data:
+            label = data['label']
+            label2 = data['label2']
+            polygon2 = data['approximated']
+            color = PALETTE[CLASSES.index(label)]
+            draw_polygon(label2, color, polygon2, draw2)
+        img2.save() #mask -> approximate polygon
+
+    # draw image: mask -> topo -> simplified polygon
+    elif mode == 3:
+        img3 = img.copy()
+        draw3 = ImageDraw.Draw(img3, mode='RGBA')
+        for label, polygons in polygons_data.items():
+            for polygon in polygons:
+                color = PALETTE[CLASSES.index(label)]
+                draw_polygon(label, color, polygon, draw3)
+        img3.save(img_path) #mask -> topo -> simplified polygon
 
     # draw original topo graph
-    img4 = Image.fromarray(np.zeros_like(result.astype(np.uint8))).convert(mode='RGB')
-    draw4 = ImageDraw.Draw(img4, mode='RGBA')
-    for label, polygons in polygons_strctured_0.items():
-        for polygon in polygons:
-            color = PALETTE[CLASSES.index(label)]
-            draw_polygon(label, color, polygon, draw4)
-    img4.save('temp/seg_result4.png') #mask -> topo polygon
+    elif mode == 4:
+        # img4 = Image.fromarray(np.zeros_like(result.astype(np.uint8))).convert(mode='RGB')
+        img4 = img.copy()
+        draw4 = ImageDraw.Draw(img4, mode='RGBA')
+        for label, polygons in polygons_data.items():
+            for polygon in polygons:
+                color = PALETTE[CLASSES.index(label)]
+                draw_polygon(label, color, polygon, draw4)
+        img4.save(img_path) #mask -> topo polygon
+    
+    else:
+        raise Exception(f'Unexpected mode: {mode}')
+
+    return img_path
+
 
 
 if __name__ == '__main__':
@@ -320,8 +339,9 @@ if __name__ == '__main__':
     polygons_strctured = get_polygon_dict(topo_s)
     polygons_strctured_0 = get_polygon_dict(topo)
 
+    polygons = [p for l,ps in polygons_strctured.items() for p in ps]
+    checkJointFromPolygon(polygons, result, True)
+
     if draw_img:
-        drawTestResults(polygons_data, polygons_strctured, polygons_strctured_0)
-        polygons = [p for l,ps in polygons_strctured.items() for p in ps]
-        # checkJointFromPolygon(polygons, result, True)
+        drawResults(polygons_data, img_path)
         
