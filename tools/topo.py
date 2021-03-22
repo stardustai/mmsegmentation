@@ -105,7 +105,7 @@ def snapPolygonPoints(polygons_data:list, mask:np.ndarray):
     # create a lookup table to register polygon vertices
     # with value on [x, y, 1]-> i'th polygon and 
     # with value on [x, y, 2]-> j'th coordinates of i'th polygon
-    vertices_lookup = np.full(list(mask.shape)+[2], fill_value=-1) 
+    vertices_lookup = np.full(list(mask.shape[::-1])+[2], fill_value=-1) 
     polygons = [i['polygon'] for i in polygons_data]
     labels = [i['label'] for i in polygons_data]
     label_indices = [CLASSES.index(l) for l in labels]
@@ -115,7 +115,7 @@ def snapPolygonPoints(polygons_data:list, mask:np.ndarray):
 
     # utils
     radius = 1
-    x_upper, y_upper = mask.shape
+    x_upper, y_upper = mask.shape[::-1]
     _validate_coord = lambda x,y: x >= 0 and y >= 0 and x < x_upper and y < y_upper
     _lookup = lambda x,y,i=0: vertices_lookup[x, y, i] if _validate_coord(x,y) else None
     _lookup_check_pair = lambda x,y,label: _lookup(x, y) is not None and _lookup(x, y) != -1 and _lookup(x, y) != label
@@ -209,14 +209,13 @@ def get_polygon_dict(topo):
 
 
 def checkJointFromPolygon(polygons, mask, draw_single_points=False):
-    point_count = np.zeros_like(mask)
+    point_count = np.zeros(mask.shape[::-1])
     for i, polygon in enumerate(polygons):
         polygon_np = np.zeros_like(point_count)
         for (x,y) in polygon:
             _x, _y = round(x), round(y)
             point_count[_x, _y] += 1
             polygon_np[_x, _y] = 1
-        assert (polygon_np > 1).sum() == 0
         # Image.fromarray(np.where(polygon_np==1, 255, 0).astype(np.uint8)).save(f'tmp/{i}.png')
     singles = (point_count == 1).sum()
     point_o = point_count.sum() - singles
