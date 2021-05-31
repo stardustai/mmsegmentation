@@ -33,6 +33,29 @@ img_path = 'temp/test.jpg'
 save_svg = False
 
 
+def polygonize(result, tolerance=1, draw_img=None):
+    # convert bitmap to polygon
+    polygons_data = extractPolygons(result)
+    # sort by area from large to small
+    polygons_data.sort(key=lambda p: p['area'], reverse=True)
+    # join vertex of polygons
+    snapPolygonPoints(polygons_data, result)  # snap points
+
+    #simplify polygons using topo
+    topo_data = [Feature(
+        geometry=Polygon([p['polygon']]),
+        properties={"name": p['label']}
+    ) for p in polygons_data]
+    fc = FeatureCollection(topo_data)
+    topo = tp.Topology(fc, prequantize=True, topology=True, shared_coords=True)
+    topo_s = topo.toposimplify(
+        epsilon=tolerance,
+        simplify_algorithm='dp',
+    )
+    # convert to desired structure
+    polygons_strctured = get_polygon_dict(topo_s)
+    return polygons_strctured
+
 
 def applyMorph(result):
     ## Image morphic operation
@@ -86,7 +109,6 @@ def extractPolygons(result):
             area, center = getBoxAreaAndCenter(polygon)
             polygon_approximated = measure.approximate_polygon(polygon, tolerance)
             label2 = label+str(j)
-            # print(f'{label2} -> center:{center} area:{area} points:{len(polygon)}->{len(polygon_approximated)}')
             if area >= 100:
                 polygons_data.append({
                     'label': label,
@@ -102,9 +124,11 @@ def extractPolygons(result):
     return polygons_data
     
 def snapPolygonPoints(polygons_data:list, mask:np.ndarray):
-    # create a lookup table to register polygon vertices
-    # with value on [x, y, 1]-> i'th polygon and 
-    # with value on [x, y, 2]-> j'th coordinates of i'th polygon
+    ''' create a lookup table to register polygon vertices
+    with value on [x, y, 1]-> i'th polygon and 
+    with value on [x, y, 2]-> j'th coordinates of i'th polygon
+    '''
+
     vertices_lookup = np.full(list(mask.shape[::-1])+[2], fill_value=-1) 
     polygons = [i['polygon'] for i in polygons_data]
     labels = [i['label'] for i in polygons_data]

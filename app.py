@@ -14,7 +14,7 @@ from service_streamer import ThreadedStreamer, Streamer
 import cv2
 from datetime import datetime
 from collections import defaultdict
-from tools.topo import extractPolygons, snapPolygonPoints, get_polygon_dict, drawResults
+from tools.polygonize import polygonize, drawResults
 from geojson import Feature, Polygon, FeatureCollection
 import topojson as tp
 
@@ -68,28 +68,6 @@ def predict(img:str):
     result = inference_segmentor(model, img)
     return result
 
-def polygonize(result, tolerance=1, draw_img=None):
-    polygons_data = extractPolygons(result)
-    #sort by area from large to small
-    polygons_data.sort(key=lambda p:p['area'], reverse=True)
-    # join vertex of polygons
-    snapPolygonPoints(polygons_data, result)#snap points
-
-    #simplify polygons using topo
-    topo_data = [Feature(
-                geometry = Polygon([p['polygon']]),
-                properties = {"name": p['label']}
-                ) for p in polygons_data]
-    fc = FeatureCollection(topo_data)
-    topo = tp.Topology(fc, prequantize=True, topology=True, shared_coords=True)
-    topo_s = topo.toposimplify(
-        epsilon=tolerance, 
-        simplify_algorithm='dp', 
-        )
-    # convert to desired structure 
-    polygons_strctured = get_polygon_dict(topo_s)
-    return polygons_strctured
-
 
 def get_random_img(n=1):
     img_table_file = base+'img_anno.csv'
@@ -114,5 +92,5 @@ if __name__ == "__main__":
     streamer = ThreadedStreamer(predict, batch_size=4, max_latency=0.5)
     # spawn child process as worker for multiple GPU
     # streamer = Streamer(predict_save, batch_size=4, max_latency=0.1)
-    app.run(port=5005, debug=True, host= '0.0.0.0')
+    app.run(port=5005, debug=False, host= '0.0.0.0')
     print('Flask started')
