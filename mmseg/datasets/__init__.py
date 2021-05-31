@@ -6,7 +6,7 @@ from .custom import CustomDataset
 from .dataset_wrappers import ConcatDataset, RepeatDataset
 from .drive import DRIVEDataset
 from .hrf import HRFDataset
-from .pascal_context import PascalContextDataset
+from .pascal_context import PascalContextDataset, PascalContextDataset59
 from .stare import STAREDataset
 from .voc import PascalVOCDataset
 from .parkinglot_dataset import ParkinglotDataset
@@ -16,4 +16,6 @@ __all__ = [
     'DATASETS', 'build_dataset', 'PIPELINES', 'CityscapesDataset',
     'PascalVOCDataset', 'ADE20KDataset', 'PascalContextDataset',
     'ChaseDB1Dataset', 'DRIVEDataset', 'HRFDataset', 'STAREDataset', 'ParkinglotDataset'
+    'PascalContextDataset59', 'ChaseDB1Dataset', 'DRIVEDataset', 'HRFDataset',
+    'STAREDataset'
 ]
